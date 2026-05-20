@@ -2,10 +2,11 @@ import os
 import requests
 from openai import OpenAI
 import dotenv
-
+from tracker import keep_track, show_history
 dotenv.load_dotenv()
 
-# 1. Cấu hình DeepSeek API
+
+# 1. Cấu hình LLM API
 # Nếu bạn dùng DeepSeek API chính hãng:
 DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY"
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
@@ -23,11 +24,13 @@ def get_crypto_price(coin_name):
             data = response[coin_name.lower()]
             usd_price = data['usd']
             vnd_price = data['vnd']
+            keep_track(coin_name, usd_price, vnd_price)
             return f"💵 Giá của {coin_name.upper()} hôm nay:\n- USD: ${usd_price:,.2f}\n- VND: {vnd_price:,.0f} đ"
         else:
             return None
     except Exception:
         return "⚠️ Không thể kết nối đến API lấy giá lúc này."
+    
 
 # 3. Hàm xử lý chatbot bằng DeepSeek
 def ask_deepseek(prompt):
@@ -59,6 +62,10 @@ while True:
     if not user_input:
         continue
 
+    if user_input.lower() == "history":
+        show_history()
+        continue
+
     # Kiểm tra xem người dùng có đang hỏi giá không
     is_asking_price = False
     for coin in popular_coins:
@@ -72,8 +79,7 @@ while True:
     
     # Nếu không hỏi giá, dùng DeepSeek trả lời kiến thức
     if not is_asking_price:
-        print("🤖 Trợ lý: DeepSeek đang suy nghĩ...")
+        print("🤖 Trợ lý đang suy nghĩ...")
         ai_response = ask_deepseek(user_input)
         print(f"🤖 Trợ lý:\n{ai_response}")
         
-    print("-" * 40)
