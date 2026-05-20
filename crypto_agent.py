@@ -9,6 +9,7 @@ dotenv.load_dotenv()
 # Nếu bạn dùng DeepSeek API chính hãng:
 DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY"
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+quit_client = ['exit', 'bye bye', 'out', 'quit', 'clear']
 
 # Mẹo: Nếu bạn chạy DeepSeek offline/local qua Ollama trên máy, hãy đổi thành:
 # client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
@@ -51,7 +52,7 @@ popular_coins = ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'card
 
 while True:
     user_input = input("👶 Bạn: ").strip()
-    if user_input.lower() == 'exit':
+    if user_input == quit_client:
         print("🤖 Tạm biệt!")
         break
         
