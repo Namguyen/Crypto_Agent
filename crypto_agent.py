@@ -51,19 +51,21 @@ def ask_deepseek(prompt):
 print("🤖 Trợ lý Crypto (DeepSeek) đã sẵn sàng! (Gõ 'exit' để thoát)")
 print("-" * 40)
 
-popular_coins = ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano']
+popular_coins = ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano','avalanche', 'doge','ton']
 
 while True:
     user_input = input("👶 Bạn: ").strip()
-    if user_input == quit_client:
+    if user_input in quit_client:
         print("🤖 Tạm biệt!")
         break
         
     if not user_input:
         continue
 
-    if user_input.lower() == "history":
-        show_history()
+    if user_input.lower().startswith("history"):
+        parts = user_input.split()
+        coin_filter = parts[1] if len(parts) > 1 else None
+        show_history(coin_filter)
         continue
 
     # Kiểm tra xem người dùng có đang hỏi giá không
