@@ -1,87 +1,90 @@
 import os
-import requests
+import json
 from openai import OpenAI
 import dotenv
 from tracker import keep_track, show_history
+from tools import get_crypto_price, TOOL_SCHEMA, TOOL_MAP
 dotenv.load_dotenv()
 
 
-# 1. Cấu hình LLM API
-# Nếu bạn dùng DeepSeek API chính hãng:
-DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY"
-client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
-quit_client = ['exit', 'bye bye', 'out', 'quit', 'clear']
-
-# Mẹo: Nếu bạn chạy DeepSeek offline/local qua Ollama trên máy, hãy đổi thành:
+# Cấu hình LLM API
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
+# offline/local model via Ollama trên máy, đổi thành:
 # client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+quit_client = ['exit', 'bye bye', 'out', 'quit', 'clear']
+ 
+SYSTEM_PROMPT = """Bạn là một trợ lý ảo chuyên về tiền điện tử (Crypto).
+Bạn có thể tra giá thực tế và xem lịch sử giá thông qua các tools được cung cấp.
+Hãy tự quyết định khi nào cần gọi tool, khi nào trả lời từ kiến thức.
+Trả lời ngắn gọn, dễ hiểu và thân thiện bằng tiếng Việt.
+Không trả lời những thứ không liên quan đến crypto, tuyệt đối tránh chủ đề chính trị,tôn giáo"""
 
-# 2. Hàm lấy giá crypto từ CoinGecko (Cập nhật trong ngày)
-def get_crypto_price(coin_name):
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_name.lower()}&vs_currencies=usd,vnd"
-    try:
-        response = requests.get(url).json()
-        if coin_name.lower() in response:
-            data = response[coin_name.lower()]
-            usd_price = data['usd']
-            vnd_price = data['vnd']
-            keep_track(coin_name, usd_price, vnd_price)
-            return f"💵 Giá của {coin_name.upper()} hôm nay:\n- USD: ${usd_price:,.2f}\n- VND: {vnd_price:,.0f} đ"
-        else:
-            return None
-    except Exception:
-        return "⚠️ Không thể kết nối đến API lấy giá lúc này."
-    
 
-# 3. Hàm xử lý chatbot bằng DeepSeek
-def ask_deepseek(prompt):
-    try:
+def run_agent(user_input: str, conversation: list) -> str:
+    """
+    Send message to LLM. If it calls a tool, execute it and feed the result
+    back — repeat until the LLM gives a final text answer.
+    """
+    conversation.append({"role": "user", "content": user_input})
+ 
+    while True:
         response = client.chat.completions.create(
-            model="deepseek-chat", # Hoặc tên model local của bạn ví dụ: "deepseek-r1:7b" nếu dùng Ollama
-            messages=[
-                {"role": "system", "content": "Bạn là một trợ lý ảo chuyên về tiền điện tử (Crypto). Hãy trả lời ngắn gọn, dễ hiểu và thân thiện."},
-                {"role": "user", "content": prompt}
-            ],
-            stream=False
+            model="deepseek-chat",
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + conversation,
+            tools=TOOL_SCHEMA,
+            tool_choice="auto",
+            stream=False,
         )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ Lỗi kết nối DeepSeek: {e}"
+ 
+        msg = response.choices[0].message
+ 
+        if msg.tool_calls:
+            conversation.append(msg)
+ 
+            for call in msg.tool_calls:
+                fn_name = call.function.name
+                fn_args = json.loads(call.function.arguments)
+                print(f"Tool: {fn_name}({fn_args})")
+ 
+                fn     = TOOL_MAP.get(fn_name)
+                result = fn(**fn_args) if fn else f"Tool '{fn_name}' không tồn tại."
+ 
+                conversation.append({
+                    "role":         "tool",
+                    "tool_call_id": call.id,
+                    "content":      str(result),
+                })
+ 
+        #  LLM gave a final answer 
+        else:
+            final = msg.content or " Không có phản hồi."
+            conversation.append({"role": "assistant", "content": final})
+            return final
+ 
+ 
+# Main Loop
+print(" Crypto Agent ")
 
-# 4. Vòng lặp chính vận hành Bot
-print("🤖 Trợ lý Crypto (DeepSeek) đã sẵn sàng! (Gõ 'exit' để thoát)")
-print("-" * 40)
-
-popular_coins = ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano','avalanche', 'doge','ton']
-
+conversation = []  # giữ context suốt session
+ 
 while True:
-    user_input = input("👶 Bạn: ").strip()
-    if user_input in quit_client:
-        print("🤖 Tạm biệt!")
+    user_input = input("Type waht you want: ").strip()
+ 
+    if user_input.lower() in quit_client:
+        print("Tạm biệt!")
         break
-        
+ 
     if not user_input:
         continue
-
-    if user_input.lower().startswith("history"):
-        parts = user_input.split()
-        coin_filter = parts[1] if len(parts) > 1 else None
-        show_history(coin_filter)
-        continue
-
-    # Kiểm tra xem người dùng có đang hỏi giá không
-    is_asking_price = False
-    for coin in popular_coins:
-        if coin in user_input.lower() or (coin == 'bitcoin' and 'btc' in user_input.lower()) or (coin == 'ethereum' and 'eth' in user_input.lower()):
-            print("🤖 Trợ lý: Đang check giá hôm nay...")
-            price_info = get_crypto_price(coin)
-            if price_info:
-                print(price_info)
-                is_asking_price = True
-                break
-    
-    # Nếu không hỏi giá, dùng DeepSeek trả lời kiến thức
-    if not is_asking_price:
-        print("🤖 Trợ lý đang suy nghĩ...")
-        ai_response = ask_deepseek(user_input)
-        print(f"🤖 Trợ lý:\n{ai_response}")
-        
+ 
+    try:
+        print("Agent đang suy nghĩ...")
+        reply = run_agent(user_input, conversation)
+        print(f"Agent:\n{reply}")
+    except Exception as e:
+        print(f"Lỗi: {e}")
+ 
+    print("-" * 50)
