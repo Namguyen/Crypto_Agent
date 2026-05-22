@@ -2,10 +2,12 @@ import os
 import json
 from openai import OpenAI
 import dotenv
-from tracker import keep_track, show_history
+from price_history import keep_track, show_history
 from tools import get_crypto_price, TOOL_SCHEMA, TOOL_MAP
-dotenv.load_dotenv()
+from alert import add_alert, remove_alert, list_alerts, reset_alert, start_monitor
 
+dotenv.load_dotenv()
+monitor = start_monitor()  # Start the alert monitoring thread when the agent starts
 
 # Cấu hình LLM API
 client = OpenAI(

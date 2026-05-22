@@ -1,5 +1,6 @@
 import requests
-from tracker import keep_track, show_history
+from price_history import keep_track, show_history
+from alert import add_alert, remove_alert, list_alerts, reset_alert
 
 # Tool functions — actual logic
 def get_crypto_price(coin_name: str) -> str:
@@ -69,16 +70,85 @@ TOOL_SCHEMA = [
                     "limit": {
                         "type": "integer",
                         "description": "Number of recent records to return. Default 10.",
-                    },
+                    }
                 },
-                "required": [],
-            },
-        },
+                "required": []
+            }
+        }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_alert",
+            "description": "Set a price alert for a cryptocurrency. The agent will monitor automatically and notify when price crosses the threshold.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "coin": {
+                        "type": "string",
+                        "description": "CoinGecko coin id (e.g., 'bitcoin', 'ethereum', 'solana', 'ripple')"
+                    },
+                    "condition": {
+                        "type": "string",
+                        "enum": ["above", "below"],
+                        "description": "Alert when price goes above or below the threshold"
+                    },
+                    "price": {
+                        "type": "number",
+                        "description": "Threshold price in USD"
+                    }
+                },
+                "required": ["coin", "condition", "price"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_alert",
+            "description": "Remove an existing alert using its ID (shown in list_alerts).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {
+                        "type": "string",
+                        "description": "The unique ID of the alert to remove"
+                    }
+                },
+                "required": ["alert_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_alerts",
+            "description": "Show all active price alerts (both pending and already triggered).",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reset_alert",
+            "description": "Reset a triggered alert so it can fire again. Provide either alert_id or coin name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {"type": "string", "description": "Alert ID to reset"},
+                    "coin": {"type": "string", "description": "Coin name to reset all its triggered alerts"}
+                }
+            }
+        }
+    }
 ]
 
 # Tool map
 TOOL_MAP = {
     "get_crypto_price":  get_crypto_price,
     "get_price_history": get_price_history,
+    "add_alert": add_alert,
+    "remove_alert": remove_alert,
+    "list_alerts": list_alerts,
+    "reset_alert": reset_alert,
 }
