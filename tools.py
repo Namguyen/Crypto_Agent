@@ -1,7 +1,7 @@
 import requests
 from price_history import keep_track, show_history
 from alert import add_alert, remove_alert, list_alerts, reset_alert
-
+from internet_search import search_crypto_news
 # Tool functions — actual logic
 def get_crypto_price(coin_name: str) -> str:
     """Fetch live price from CoinGecko and log it."""
@@ -140,7 +140,24 @@ TOOL_SCHEMA = [
                 }
             }
         }
-    }
+    },
+{
+    "type": "function",
+    "function": {
+        "name": "search_crypto_news",
+        "description": "Tìm kiếm tin tức mới nhất và thông tin cập nhật về thị trường tiền điện tử (crypto) bằng Tavily. Dùng khi người dùng hỏi về tin tức, sự kiện, xu hướng hoặc bất kỳ thông tin thời sự nào liên quan đến crypto.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Câu hỏi hoặc từ khóa về tin tức crypto mà người dùng muốn tìm kiếm. Ví dụ: 'giá bitcoin hôm nay', 'tin tức về Ethereum', 'xu hướng DeFi mới nhất'",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+},
 ]
 
 # Tool map
@@ -151,4 +168,5 @@ TOOL_MAP = {
     "remove_alert": remove_alert,
     "list_alerts": list_alerts,
     "reset_alert": reset_alert,
+    "search_crypto_news": search_crypto_news,
 }

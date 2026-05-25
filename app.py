@@ -62,6 +62,38 @@ def run_agent(user_input: str, conversation: list) -> str:
 conversation_history = []
 
 
+def load_history():
+    if not os.path.exists("crypto_history.json"):
+        return []
+    try:
+        with open("crypto_history.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def price_sidebar_data():
+    history = load_history()
+    latest = {}
+    for item in history:
+        coin = item.get("coin", "").upper()
+        if not coin:
+            continue
+        current = latest.get(coin)
+        if current is None or item.get("time", "") > current["time"]:
+            latest[coin] = {
+                "symbol": coin,
+                "price": item.get("usd", 0) or item.get("USD", 0),
+                "time": item.get("time", ""),
+            }
+    return list(latest.values())
+
+
+@app.route('/api/price-data')
+def price_data():
+    return jsonify({"prices": price_sidebar_data()})
+
+
 @app.route('/')
 def index():
     return render_template('index.html')

@@ -1,260 +1,385 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Agent</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            width: 100%;
-            max-width: 600px;
-            display: flex;
-            flex-direction: column;
-            height: 70vh;
-            max-height: 600px;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px 10px 0 0;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-        
-        .header p {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-        
-        .chat-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .message {
-            display: flex;
-            gap: 10px;
-            animation: slideIn 0.3s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .message.user {
-            justify-content: flex-end;
-        }
-        
-        .message-content {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 10px;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        .user .message-content {
-            background: #667eea;
-            color: white;
-            border-radius: 15px 15px 0 15px;
-        }
-        
-        .agent .message-content {
-            background: #f0f0f0;
-            color: #333;
-            border-radius: 15px 15px 15px 0;
-        }
-        
-        .agent .message-content {
-            text-align: left;
-        }
-        
-        .input-area {
-            border-top: 1px solid #eee;
-            padding: 15px;
-            display: flex;
-            gap: 10px;
-        }
-        
-        input[type="text"] {
-            flex: 1;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            padding: 10px 15px;
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-        
-        input[type="text"]:focus {
-            border-color: #667eea;
-        }
-        
-        button {
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            padding: 10px 20px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #764ba2;
-        }
-        
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            display: flex;
-            gap: 5px;
-            align-items: center;
-            font-size: 12px;
-            color: #999;
-        }
-        
-        .loading span {
-            animation: pulse 1.5s infinite;
-        }
-        
-        .loading span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        
-        .loading span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 1; }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crypto Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #070810;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    .root {
+      background: #0b0d11;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      width: 900px;
+      height: 640px;
+      border: 1px solid #1a1e28;
+    }
+
+    /* ── Header ── */
+    .hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      border-bottom: 1px solid #1a1e28;
+      flex-shrink: 0;
+    }
+    .hdr-left { display: flex; align-items: center; gap: 10px; }
+    .amber-dot { width: 8px; height: 8px; border-radius: 50%; background: #EF9F27; flex-shrink: 0; }
+    .brand { font-size: 11px; letter-spacing: .16em; color: #EF9F27; font-weight: 600; }
+    .hdr-right { display: flex; align-items: center; gap: 16px; }
+    .live-badge {
+      font-size: 10px; color: #4a9e6a; letter-spacing: .08em;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .live-badge::before {
+      content: ''; width: 5px; height: 5px;
+      border-radius: 50%; background: #4a9e6a; display: block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .clock { font-size: 11px; color: #3a4252; letter-spacing: .04em; }
+
+    /* ── Body ── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 152px;
+      flex-shrink: 0;
+      border-right: 1px solid #1a1e28;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #1a1e28; }
+
+    .tkr {
+      padding: 10px 14px;
+      border-left: 2px solid transparent;
+      cursor: default;
+      transition: background .12s;
+    }
+    .tkr:hover { background: #0f1219; }
+    .tkr-sym { font-size: 10px; letter-spacing: .1em; color: #4a5268; font-weight: 600; }
+    .tkr-price { font-size: 13px; font-weight: 600; margin-top: 3px; letter-spacing: .01em; }
+    .tkr-chg { font-size: 10px; margin-top: 2px; }
+    .up { color: #4a9e6a; }
+    .dn { color: #a04050; }
+
+    /* ── Chat column ── */
+    .chat-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+    /* Quick commands */
+    .qbar {
+      display: flex; gap: 5px; padding: 8px 14px;
+      border-bottom: 1px solid #1a1e28;
+      flex-wrap: wrap; flex-shrink: 0;
+    }
+    .qbtn {
+      font-size: 10px; padding: 3px 10px; border-radius: 4px;
+      background: #0f1219; border: 1px solid #1e2330;
+      color: #4a5268; cursor: pointer; font-family: inherit;
+      letter-spacing: .04em; transition: all .15s; white-space: nowrap;
+    }
+    .qbtn:hover { border-color: rgba(239,159,39,.4); color: #EF9F27; }
+
+    /* Messages */
+    .msgs {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .msgs::-webkit-scrollbar { width: 3px; }
+    .msgs::-webkit-scrollbar-thumb { background: #1a1e28; border-radius: 2px; }
+
+    .msg { max-width: 90%; display: flex; flex-direction: column; }
+    .msg-u { align-self: flex-end; }
+    .msg-a { align-self: flex-start; }
+
+    .lbl { font-size: 9px; letter-spacing: .14em; color: #2e3444; margin-bottom: 3px; }
+    .lbl-r { text-align: right; }
+
+    .bbl { padding: 10px 14px; border-radius: 7px; font-size: 12px; line-height: 1.7; }
+    .bbl-u { background: #EF9F27; color: #0b0d11; font-weight: 600; }
+    .bbl-a { background: #0f1219; color: #b8bdc8; border: 1px solid #1e2330; }
+
+    /* Loading dots */
+    .dots span { animation: blink 1s infinite; }
+    .dots span:nth-child(2) { animation-delay: .25s; }
+    .dots span:nth-child(3) { animation-delay: .5s; }
+    @keyframes blink { 0%,100%{opacity:.15} 50%{opacity:1} }
+
+    /* Input row */
+    .input-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border-top: 1px solid #1a1e28; flex-shrink: 0;
+    }
+    .inp-wrap {
+      flex: 1; display: flex; align-items: center;
+      background: #0f1219; border: 1px solid #1e2330;
+      border-radius: 6px; padding: 0 13px; transition: border-color .15s;
+    }
+    .inp-wrap:focus-within { border-color: rgba(239,159,39,.35); }
+    .inp {
+      flex: 1; background: none; border: none; outline: none;
+      color: #c8cdd8; font-family: inherit; font-size: 12px;
+      padding: 10px 0; letter-spacing: .02em;
+    }
+    .inp::placeholder { color: #2a3040; }
+
+    .sbtn {
+      width: 32px; height: 32px; border-radius: 6px;
+      background: #EF9F27; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background .15s;
+    }
+    .sbtn:hover { background: #BA7517; }
+    .sbtn:disabled { opacity: .35; cursor: not-allowed; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 Crypto Agent</h1>
-            <p>Hỏi tôi về giá crypto</p>
-        </div>
-        
-        <div class="chat-area" id="chatArea">
-            <div class="message agent">
-                <div class="message-content">Chào bạn! 👋 Tôi là Crypto Agent. Hỏi tôi về giá các đồng tiền điện tử hoặc lịch sử giá của chúng.</div>
-            </div>
-        </div>
-        
-        <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Hỏi tôi gì đi..." autocomplete="off">
-            <button id="sendBtn" onclick="sendMessage()">Gửi</button>
-        </div>
+
+<div class="root">
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="amber-dot"></div>
+      <span class="brand">CRYPTO AGENT</span>
     </div>
-    
-    <script>
-        const chatArea = document.getElementById('chatArea');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-        
-        function addMessage(text, isUser) {
-            const msgEl = document.createElement('div');
-            msgEl.className = `message ${isUser ? 'user' : 'agent'}`;
-            msgEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
-            chatArea.appendChild(msgEl);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-        
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-            
-            addMessage(message, true);
-            messageInput.value = '';
-            sendBtn.disabled = true;
-            
-            addMessage('⏳ Đang suy nghĩ...', false);
-            
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                });
-                
-                chatArea.removeChild(chatArea.lastChild);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    addMessage(data.reply, false);
-                } else {
-                    const data = await response.json();
-                    addMessage(`Lỗi: ${data.error || 'Không rõ'}`, false);
-                }
-            } catch (err) {
-                chatArea.removeChild(chatArea.lastChild);
-                addMessage(`Lỗi kết nối: ${err.message}`, false);
-            } finally {
-                sendBtn.disabled = false;
-                messageInput.focus();
-            }
-        }
-    </script>
+    <div class="hdr-right">
+      <span class="live-badge">MARKETS LIVE</span>
+      <span class="clock" id="clk">--:--:--</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- Price sidebar -->
+    <div class="sidebar" id="sb"></div>
+
+    <!-- Chat area -->
+    <div class="chat-col">
+      <!-- Quick commands -->
+      <div class="qbar">
+        <button class="qbtn" onclick="qs('BTC price and trend analysis')">BTC analysis</button>
+        <button class="qbtn" onclick="qs('Latest crypto news today')">latest news</button>
+        <button class="qbtn" onclick="qs('ETH vs SOL — which is stronger right now?')">ETH vs SOL</button>
+        <button class="qbtn" onclick="qs('Top gainers and losers today')">top movers</button>
+        <button class="qbtn" onclick="qs('DeFi sector overview')">DeFi</button>
+      </div>
+
+      <!-- Messages -->
+      <div class="msgs" id="msgs">
+        <div class="msg msg-a">
+          <div class="lbl">CRYPTO AGENT</div>
+          <div class="bbl bbl-a">
+            CRYPTO AGENT online. Ask me about prices, market trends, or crypto news — I'll give you the data.
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="input-row">
+        <div class="inp-wrap">
+          <input class="inp" id="inp" type="text"
+            placeholder="Ask about prices, news, on-chain data…" autocomplete="off" />
+        </div>
+        <button class="sbtn" id="sbtn" onclick="send()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="#0b0d11" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  CONFIG — local agent integration
+// ─────────────────────────────────────────────
+const API_CHAT  = '/api/chat';
+const API_PRICE = '/api/price-data';
+
+let P = {};
+let hist = [];
+let busy = false;
+
+async function loadPriceData() {
+  try {
+    const res = await fetch(API_PRICE);
+    const data = await res.json();
+    if (data.prices) {
+      P = data.prices.reduce((acc, item) => {
+        acc[item.symbol] = {
+          p: item.price,
+          c: 0,
+          d: 0,
+          time: item.time,
+        };
+        return acc;
+      }, {});
+      renderSB();
+    }
+  } catch (e) {
+    console.error('Failed to load price data', e);
+  }
+}
+
+const WS_ASSETS = {
+  bitcoin: 'BTC',
+  ethereum: 'ETH',
+  solana: 'SOL',
+};
+
+function connectPriceSocket() {
+  const ws = new WebSocket('wss://ws.coincap.io/prices?assets=bitcoin,ethereum,solana');
+
+  ws.onopen = () => console.log('CoinCap WS connected');
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    let updated = false;
+
+    for (const [coin, value] of Object.entries(data)) {
+      const symbol = WS_ASSETS[coin];
+      if (!symbol || !P[symbol]) continue;
+
+      const next = parseFloat(value);
+      if (Number.isNaN(next)) continue;
+
+      const prev = P[symbol].p || next;
+      P[symbol].c = prev === 0 ? 0 : ((next - prev) / prev) * 100;
+      P[symbol].d = P[symbol].c >= 0 ? 1 : -1;
+      P[symbol].p = next;
+      updated = true;
+    }
+
+    if (updated) renderSB();
+  };
+
+  ws.onerror = (err) => console.error('CoinCap WS error', err);
+  ws.onclose = () => {
+    console.warn('CoinCap WS closed, reconnecting in 5s');
+    setTimeout(connectPriceSocket, 5000);
+  };
+}
+
+
+// ── Price sidebar ────────────────────────────
+function fmtP(p) {
+  if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 1)    return '$' + p.toFixed(2);
+  return '$' + p.toFixed(4);
+}
+
+function renderSB() {
+  document.getElementById('sb').innerHTML = Object.entries(P).map(([s, d]) => `
+    <div class="tkr">
+      <div class="tkr-sym">${s}/USD</div>
+      <div class="tkr-price ${d.d > 0 ? 'up' : 'dn'}">${fmtP(d.p)}</div>
+      <div class="tkr-chg  ${d.d > 0 ? 'up' : 'dn'}">${d.d > 0 ? '▲' : '▼'} ${Math.abs(d.c).toFixed(2)}%</div>
+    </div>`).join('');
+}
+
+// ── Chat ─────────────────────────────────────
+function escape(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(t) {
+  return escape(t)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,   '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+function addMsg(role, html) {
+  const isUser = role === 'user';
+  const el = document.createElement('div');
+  el.className = 'msg ' + (isUser ? 'msg-u' : 'msg-a');
+  el.innerHTML = `
+    <div class="lbl ${isUser ? 'lbl-r' : ''}">${isUser ? 'YOU' : 'CRYPTO AGENT'}</div>
+    <div class="bbl ${isUser ? 'bbl-u' : 'bbl-a'}">${html}</div>`;
+  const c = document.getElementById('msgs');
+  c.appendChild(el);
+  c.scrollTop = c.scrollHeight;
+  return el;
+}
+
+async function send() {
+  if (busy) return;
+  const el  = document.getElementById('inp');
+  const txt = el.value.trim();
+  if (!txt) return;
+  el.value = '';
+
+  hist.push({ role: 'user', content: txt });
+  addMsg('user', escape(txt));
+
+  busy = true;
+  document.getElementById('sbtn').disabled = true;
+
+  const loader = addMsg('assistant',
+    '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>');
+
+  try {
+    const res = await fetch(API_CHAT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: txt }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Chat request failed');
+
+    const reply = data.reply || 'Không có phản hồi.';
+    hist.push({ role: 'assistant', content: reply });
+    loader.querySelector('.bbl').innerHTML = fmt(reply);
+
+  } catch (e) {
+    loader.querySelector('.bbl').textContent = 'Connection error. Please try again.';
+    console.error(e);
+  }
+
+  busy = false;
+  document.getElementById('sbtn').disabled = false;
+  document.getElementById('inp').focus();
+  document.getElementById('msgs').scrollTop = 9999;
+}
+
+function qs(t) { document.getElementById('inp').value = t; send(); }
+
+document.getElementById('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+// ── Clock ────────────────────────────────────
+function tick() {
+  document.getElementById('clk').textContent = new Date().toTimeString().slice(0, 8);
+}
+
+// ── Init ─────────────────────────────────────
+async function init() {
+  await loadPriceData();
+  connectPriceSocket();
+  tick();
+  setInterval(tick, 1000);
+}
+
+init();
+</script>
 </body>
 </html>
