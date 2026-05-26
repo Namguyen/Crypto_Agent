@@ -42,6 +42,57 @@
     .amber-dot { width: 8px; height: 8px; border-radius: 50%; background: #EF9F27; flex-shrink: 0; }
     .brand { font-size: 11px; letter-spacing: .16em; color: #EF9F27; font-weight: 600; }
     .hdr-right { display: flex; align-items: center; gap: 16px; }
+
+    .auth-box {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      max-width: 220px;
+      padding: 3px 7px;
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 4px;
+    }
+    .auth-avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: none;
+      flex-shrink: 0;
+    }
+    .auth-box.signed-in .auth-avatar {
+      display: block;
+    }
+    .auth-name {
+      max-width: 105px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #6b7488;
+      font-size: 10px;
+      letter-spacing: .04em;
+    }
+    .auth-box.signed-in .auth-name {
+      color: #c8cdd8;
+    }
+    .auth-btn {
+      background: transparent;
+      border: 1px solid #2a3040;
+      color: #EF9F27;
+      font-size: 9px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: .06em;
+      flex-shrink: 0;
+    }
+    .auth-btn:hover {
+      border-color: rgba(239,159,39,.5);
+      background: rgba(239,159,39,.08);
+    }
     
     /* Notebook toggle button */
     .toggle-nb-btn {
@@ -226,6 +277,7 @@
       padding: 10px 0; letter-spacing: .02em;
     }
     .inp::placeholder { color: #2a3040; }
+    .inp:disabled { color: #4a5268; cursor: not-allowed; }
 
     .sbtn {
       width: 32px; height: 32px; border-radius: 6px;
@@ -429,6 +481,12 @@
       <span class="brand">CRYPTO AGENT_</span>
     </div>
     <div class="hdr-right">
+      <div class="auth-box" id="authBox">
+        <img class="auth-avatar" id="authAvatar" alt="" />
+        <span class="auth-name" id="authName">GUEST</span>
+        <button class="auth-btn" id="authBtn" onclick="handleAuthClick()">LOGIN</button>
+        <button class="auth-btn" id="devBtn" style="background:#10202a;border-color:#123;" onclick="devLoginPrompt()">DEV</button>
+      </div>
       <!-- Status Indicator -->
       <span class="db-status">LOCAL SYSTEM ACTIVE</span>
       
@@ -523,11 +581,54 @@
 <!-- Toast notifications -->
 <div id="toastContainer"></div>
 
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <script>
+window.GOOGLE_CLIENT_ID = "{{ google_client_id }}";
+
+function handleCredentialResponse(response) {
+  const id_token = response && response.credential;
+  if (!id_token) return;
+  fetch('/auth/jwt-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token }),
+  }).then(r => {
+    if (r.ok) window.location.reload();
+    else r.json().then(j => showToast(j.error || 'Login failed'));
+  }).catch(() => showToast('Login failed'));
+}
+
+function initGoogleIdentity() {
+  if (!window.GOOGLE_CLIENT_ID) return;
+  try {
+    google.accounts.id.initialize({
+      client_id: window.GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse,
+      auto_select: false,
+    });
+  } catch (e) {
+    console.warn('Google Identity init failed', e);
+  }
+}
+
+initGoogleIdentity();
+
+
+// ─────────────────────────────────────────────
+//  CONFIG & LOCAL NOTEBOOK STATE
+// ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
 //  CONFIG & LOCAL NOTEBOOK STATE
 // ─────────────────────────────────────────────
 const API_CHAT = '/api/chat';
+const API_AUTH_ME = '/api/auth/me';
+const AUTH_LOGIN = '/auth/google/login';
+const AUTH_LOGOUT = '/auth/logout';
+const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
+const LOGIN_PLACEHOLDER = 'Login with Google to chat with Crypto Agent...';
+const SETUP_PLACEHOLDER = 'Configure Google OAuth env vars, then restart Flask...';
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -542,6 +643,13 @@ const COINGECKO_MAP = {
 let P = {};
 let hist = [];
 let busy = false;
+let authState = {
+  authenticated: false,
+  user: null,
+  oauthConfigured: false,
+  loginUrl: AUTH_LOGIN,
+  logoutUrl: AUTH_LOGOUT,
+};
 let notes = []; // Persisted locally
 
 // ── CoinGecko — fetch prices + 24h % change ──
@@ -726,6 +834,109 @@ function showToast(msg) {
   container.innerHTML = `<div class="toast">${msg.toUpperCase()}</div>`;
 }
 
+async function loadAuthState() {
+  try {
+    const res = await fetch(API_AUTH_ME);
+    authState = await res.json();
+  } catch (e) {
+    authState = {
+      authenticated: false,
+      user: null,
+      oauthConfigured: false,
+      loginUrl: AUTH_LOGIN,
+      logoutUrl: AUTH_LOGOUT,
+    };
+    console.error('Auth state failed:', e);
+  }
+  renderAuthState();
+}
+
+function syncChatControls() {
+  const inp = document.getElementById('inp');
+  const sbtn = document.getElementById('sbtn');
+  if (!inp || !sbtn) return;
+
+  inp.disabled = !authState.authenticated;
+  sbtn.disabled = busy || !authState.authenticated;
+
+  if (authState.authenticated) {
+    inp.placeholder = CHAT_PLACEHOLDER;
+  } else if (authState.oauthConfigured) {
+    inp.placeholder = LOGIN_PLACEHOLDER;
+  } else {
+    inp.placeholder = SETUP_PLACEHOLDER;
+  }
+}
+
+function renderAuthState() {
+  const box = document.getElementById('authBox');
+  const avatar = document.getElementById('authAvatar');
+  const name = document.getElementById('authName');
+  const btn = document.getElementById('authBtn');
+  if (!box || !avatar || !name || !btn) return;
+
+  box.classList.toggle('signed-in', authState.authenticated);
+
+  if (authState.authenticated) {
+    const user = authState.user || {};
+    name.textContent = user.name || user.email || 'SIGNED IN';
+    btn.textContent = 'LOGOUT';
+    if (user.picture && user.picture.startsWith('https://')) {
+      avatar.src = user.picture;
+      avatar.style.display = '';
+    } else {
+      avatar.removeAttribute('src');
+      avatar.style.display = 'none';
+    }
+  } else {
+    name.textContent = authState.oauthConfigured ? 'GUEST' : 'OAUTH SETUP';
+    btn.textContent = authState.oauthConfigured ? 'LOGIN' : 'SETUP';
+    avatar.removeAttribute('src');
+    avatar.style.display = 'none';
+  }
+
+  syncChatControls();
+}
+
+async function handleAuthClick() {
+  if (!authState.authenticated) {
+    if (window.GOOGLE_CLIENT_ID && authState.jwtLoginUrl) {
+      try { google.accounts.id.prompt(); } catch (e) { window.location.href = authState.loginUrl || AUTH_LOGIN; }
+      return;
+    }
+    window.location.href = authState.loginUrl || AUTH_LOGIN;
+    return;
+  }
+
+  try {
+    await fetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' });
+  } finally {
+    window.location.reload();
+  }
+}
+
+async function devLoginPrompt() {
+  const username = prompt('Dev username (leave blank to cancel):', 'dev');
+  if (!username) return;
+  const password = prompt('Dev password:','');
+  try {
+    const res = await fetch('/auth/self-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Dev login failed');
+      return;
+    }
+    // success: server sets session; reload to reflect auth state
+    window.location.reload();
+  } catch (e) {
+    showToast('Dev login failed');
+  }
+}
+
 // ── Chat Helpers ─────────────────────────────
 function escape(t) {
   return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -782,6 +993,10 @@ function addMsg(role, rawText, isHtml = false) {
 
 async function send() {
   if (busy) return;
+  if (!authState.authenticated) {
+    showToast(authState.oauthConfigured ? 'Login required' : 'OAuth setup required');
+    return;
+  }
   const el  = document.getElementById('inp');
   const txt = el.value.trim();
   if (!txt) return;
@@ -791,7 +1006,7 @@ async function send() {
   addMsg('user', txt);
 
   busy = true;
-  document.getElementById('sbtn').disabled = true;
+  syncChatControls();
 
   const loader = addMsg('assistant',
     '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>', true);
@@ -804,7 +1019,11 @@ async function send() {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Yêu cầu trò chuyện thất bại');
+    if (res.status === 401) {
+      authState.authenticated = false;
+      renderAuthState();
+    }
+    if (!res.ok) throw new Error(data.error || 'Chat request failed');
 
     const reply = data.reply || 'Không nhận được phản hồi.';
     hist.push({ role: 'assistant', content: reply });
@@ -813,12 +1032,12 @@ async function send() {
     addMsg('assistant', reply);
 
   } catch (e) {
-    loader.querySelector('.bbl').textContent = 'Lỗi kết nối. Vui lòng thử lại.';
+    loader.querySelector('.bbl').textContent = e.message || 'Connection failed. Please try again.';
     console.error(e);
   }
 
   busy = false;
-  document.getElementById('sbtn').disabled = false;
+  syncChatControls();
   document.getElementById('inp').focus();
   document.getElementById('msgs').scrollTop = 9999;
 }
@@ -844,6 +1063,7 @@ function tick() {
 
 // ── Init ─────────────────────────────────────
 async function init() {
+  await loadAuthState();
   await fetchPrices();
   setInterval(fetchPrices, 30000);
   tick();
