@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crypto Agent</title>
+  <title>Crypto Agent Terminal & Notebook</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,6 +14,7 @@
       justify-content: center;
       min-height: 100vh;
       font-family: 'Courier New', Courier, monospace;
+      color: #c8cdd8;
     }
 
     .root {
@@ -22,9 +23,10 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      width: 900px;
-      height: 640px;
+      width: 1100px; /* Width containing all 3 columns */
+      height: 680px;
       border: 1px solid #1a1e28;
+      transition: width 0.3s ease;
     }
 
     /* ── Header ── */
@@ -32,7 +34,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 18px;
+      padding: 12px 18px;
       border-bottom: 1px solid #1a1e28;
       flex-shrink: 0;
     }
@@ -40,6 +42,41 @@
     .amber-dot { width: 8px; height: 8px; border-radius: 50%; background: #EF9F27; flex-shrink: 0; }
     .brand { font-size: 11px; letter-spacing: .16em; color: #EF9F27; font-weight: 600; }
     .hdr-right { display: flex; align-items: center; gap: 16px; }
+    
+    /* Notebook toggle button */
+    .toggle-nb-btn {
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      color: #EF9F27;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+    .toggle-nb-btn:hover {
+      background: #ef9f27;
+      color: #0b0d11;
+    }
+
+    /* Local status indicator */
+    .db-status {
+      font-size: 9px;
+      letter-spacing: .08em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #4a9e6a;
+    }
+    .db-status::before {
+      content: ''; width: 6px; height: 6px;
+      border-radius: 50%; background: currentColor; display: block;
+    }
+
     .live-badge {
       font-size: 10px; color: #4a9e6a; letter-spacing: .08em;
       display: flex; align-items: center; gap: 5px;
@@ -55,7 +92,7 @@
     /* ── Body ── */
     .body { display: flex; flex: 1; overflow: hidden; }
 
-    /* ── Sidebar ── */
+    /* ── Sidebar (Left) ── */
     .sidebar {
       width: 152px;
       flex-shrink: 0;
@@ -69,18 +106,27 @@
     .tkr {
       padding: 10px 14px;
       border-left: 2px solid transparent;
-      cursor: default;
-      transition: background .12s;
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
     }
-    .tkr:hover { background: #0f1219; }
+    .tkr:hover { 
+      background: #0f1219; 
+      border-left-color: #EF9F27;
+    }
     .tkr-sym { font-size: 10px; letter-spacing: .1em; color: #4a5268; font-weight: 600; }
     .tkr-price { font-size: 13px; font-weight: 600; margin-top: 3px; letter-spacing: .01em; }
     .tkr-chg { font-size: 10px; margin-top: 2px; }
     .up { color: #4a9e6a; }
     .dn { color: #a04050; }
 
-    /* ── Chat column ── */
-    .chat-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    /* ── Chat Column (Center) ── */
+    .chat-col { 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column; 
+      overflow: hidden; 
+      min-width: 0; 
+    }
 
     /* Quick commands */
     .qbar {
@@ -99,21 +145,63 @@
     /* Messages */
     .msgs {
       flex: 1; overflow-y: auto; padding: 16px;
-      display: flex; flex-direction: column; gap: 12px;
+      display: flex; flex-direction: column; gap: 14px;
     }
-    .msgs::-webkit-scrollbar { width: 3px; }
+    .msgs::-webkit-scrollbar { width: 4px; }
+    .msgs::-webkit-scrollbar-track { background: #0b0d11; }
     .msgs::-webkit-scrollbar-thumb { background: #1a1e28; border-radius: 2px; }
 
-    .msg { max-width: 90%; display: flex; flex-direction: column; }
+    .msg { max-width: 90%; display: flex; flex-direction: column; position: relative; }
     .msg-u { align-self: flex-end; }
-    .msg-a { align-self: flex-start; }
+    .msg-a { align-self: flex-start; width: 85%; }
 
     .lbl { font-size: 9px; letter-spacing: .14em; color: #2e3444; margin-bottom: 3px; }
     .lbl-r { text-align: right; }
 
-    .bbl { padding: 10px 14px; border-radius: 7px; font-size: 12px; line-height: 1.7; }
+    .bbl { padding: 12px 14px; border-radius: 7px; font-size: 12px; line-height: 1.6; }
     .bbl-u { background: #EF9F27; color: #0b0d11; font-weight: 600; }
-    .bbl-a { background: #0f1219; color: #b8bdc8; border: 1px solid #1e2330; }
+    .bbl-a { background: #0f1219; color: #b8bdc8; border: 1px solid #1e2330; position: relative; }
+
+    /* Actions under messages */
+    .msg-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+      padding-left: 2px;
+    }
+    .act-btn {
+      background: none;
+      border: none;
+      color: #4a5268;
+      font-size: 9px;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .act-btn:hover {
+      color: #EF9F27;
+    }
+
+    /* Text formatting inside chat bubbles */
+    pre {
+      background: #05060a;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #1a1e28;
+      margin: 8px 0;
+      overflow-x: auto;
+      font-size: 11px;
+      color: #ef9f27;
+    }
+    code {
+      background: #1e2330;
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: #EF9F27;
+      font-size: 11px;
+    }
 
     /* Loading dots */
     .dots span { animation: blink 1s infinite; }
@@ -147,28 +235,223 @@
     }
     .sbtn:hover { background: #BA7517; }
     .sbtn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── Notebook Column (Right - Notebook Drawer) ── */
+    .notebook-col {
+      width: 340px;
+      border-left: 1px solid #1a1e28;
+      background: #090b0e;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width 0.3s ease, border-color 0.3s ease;
+      flex-shrink: 0;
+    }
+    .notebook-col.collapsed {
+      width: 0;
+      border-left-color: transparent;
+    }
+
+    .nb-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid #1a1e28;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0b0d11;
+    }
+    .nb-title {
+      font-size: 10px;
+      letter-spacing: .12em;
+      color: #ef9f27;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nb-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .nb-header-btn {
+      background: none;
+      border: none;
+      color: #4a5268;
+      cursor: pointer;
+      font-size: 10px;
+      font-family: inherit;
+    }
+    .nb-header-btn:hover {
+      color: #ef9f27;
+    }
+
+    /* Note Input Area */
+    .nb-editor {
+      padding: 10px;
+      border-bottom: 1px solid #1a1e28;
+      background: #0b0d11;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .nb-textarea {
+      width: 100%;
+      height: 70px;
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 4px;
+      padding: 8px;
+      color: #c8cdd8;
+      font-family: inherit;
+      font-size: 11px;
+      resize: none;
+      outline: none;
+    }
+    .nb-textarea:focus {
+      border-color: rgba(239, 159, 27, 0.4);
+    }
+    .nb-save-btn {
+      background: #ef9f27;
+      color: #0b0d11;
+      border: none;
+      padding: 6px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+    .nb-save-btn:hover {
+      background: #ba7517;
+    }
+
+    /* Note List */
+    .nb-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .nb-list::-webkit-scrollbar { width: 3px; }
+    .nb-list::-webkit-scrollbar-thumb { background: #1a1e28; }
+
+    .nb-item {
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      animation: fadeIn 0.25s ease-out;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .nb-item-content {
+      white-space: pre-wrap;
+      color: #aeb4c2;
+    }
+    .nb-item-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #3a4252;
+      border-top: 1px dashed #1a1e28;
+      padding-top: 6px;
+      margin-top: 2px;
+    }
+    .nb-item-tools {
+      display: flex;
+      gap: 8px;
+    }
+    .nb-item-action {
+      background: none;
+      border: none;
+      color: #4a5268;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 9px;
+    }
+    .nb-item-action:hover {
+      color: #ef9f27;
+    }
+    .nb-item-action.del:hover {
+      color: #a04050;
+    }
+    
+    .nb-empty {
+      color: #3a4252;
+      font-size: 11px;
+      text-align: center;
+      margin-top: 40px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #10141d;
+      border: 1px solid #ef9f27;
+      color: #ef9f27;
+      font-size: 11px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      z-index: 999;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      animation: slideDownUp 2.5s forwards;
+    }
+    @keyframes slideDownUp {
+      0% { top: -40px; opacity: 0; }
+      15% { top: 20px; opacity: 1; }
+      85% { top: 20px; opacity: 1; }
+      100% { top: -40px; opacity: 0; }
+    }
   </style>
 </head>
 <body>
 
-<div class="root">
+<div class="root" id="root">
   <!-- Header -->
   <div class="hdr">
     <div class="hdr-left">
       <div class="amber-dot"></div>
-      <span class="brand">CRYPTO AGENT</span>
+      <span class="brand">CRYPTO AGENT_</span>
     </div>
     <div class="hdr-right">
+      <!-- Status Indicator -->
+      <span class="db-status">LOCAL SYSTEM ACTIVE</span>
+      
+      <button class="toggle-nb-btn" onclick="toggleNotebook()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        SỔ TAY [TAB]
+      </button>
       <span class="live-badge">MARKETS LIVE</span>
       <span class="clock" id="clk">--:--:--</span>
     </div>
   </div>
 
   <div class="body">
-    <!-- Price sidebar -->
+    <!-- Price sidebar (Left) -->
     <div class="sidebar" id="sb"></div>
 
-    <!-- Chat area -->
+    <!-- Chat area (Center) -->
     <div class="chat-col">
       <!-- Quick commands -->
       <div class="qbar">
@@ -184,7 +467,9 @@
         <div class="msg msg-a">
           <div class="lbl">CRYPTO AGENT</div>
           <div class="bbl bbl-a">
-            CRYPTO AGENT online. Ask me about prices, market trends, or crypto news — I'll give you the data.
+            CRYPTO AGENT online. Hãy hỏi tôi về giá cả, xu hướng thị trường hoặc thông tin on-chain.
+            <br><br>
+            💾 <strong>Sổ tay Offline:</strong> Toàn bộ dữ liệu ghi chú của bạn được lưu an toàn trực tiếp trên máy này qua bộ nhớ trình duyệt!
           </div>
         </div>
       </div>
@@ -193,7 +478,7 @@
       <div class="input-row">
         <div class="inp-wrap">
           <input class="inp" id="inp" type="text"
-            placeholder="Ask about prices, news, on-chain data…" autocomplete="off" />
+            placeholder="Đặt câu hỏi, tra cứu giá, tin tức thị trường..." autocomplete="off" />
         </div>
         <button class="sbtn" id="sbtn" onclick="send()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -204,82 +489,88 @@
         </button>
       </div>
     </div>
+
+    <!-- Notebook Column (Right - AI Notebook) -->
+    <div class="notebook-col" id="nbCol">
+      <div class="nb-header">
+        <span class="nb-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          SỔ TAY CÁ NHÂN
+        </span>
+        <div class="nb-actions">
+          <button class="nb-header-btn" onclick="clearAllNotes()" title="Xóa toàn bộ">Clear</button>
+          <button class="nb-header-btn" onclick="toggleNotebook()" title="Thu nhỏ">✕</button>
+        </div>
+      </div>
+
+      <!-- Manual Note Input Box -->
+      <div class="nb-editor">
+        <textarea class="nb-textarea" id="nbText" placeholder="Ghi lại chiến lược, dự phóng, hoặc dán ghi chú vào đây..."></textarea>
+        <button class="nb-save-btn" id="saveBtn" onclick="saveManualNote()">LƯU VÀO SỔ TAY</button>
+      </div>
+
+      <!-- Saved Notes List -->
+      <div class="nb-list" id="nbList">
+        <div class="nb-empty">ĐANG TẢI DỮ LIỆU...</div>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- Toast notifications -->
+<div id="toastContainer"></div>
+
 <script>
 // ─────────────────────────────────────────────
-//  CONFIG — local agent integration
+//  CONFIG & LOCAL NOTEBOOK STATE
 // ─────────────────────────────────────────────
-const API_CHAT  = '/api/chat';
-const API_PRICE = '/api/price-data';
+const API_CHAT = '/api/chat';
+
+const COINGECKO_MAP = {
+  bitcoin:       'BTC',
+  ethereum:      'ETH',
+  solana:        'SOL',
+  binancecoin:   'BNB',
+  ripple:        'XRP',
+  cardano:       'ADA',
+  'avalanche-2': 'AVAX',
+};
 
 let P = {};
 let hist = [];
 let busy = false;
+let notes = []; // Persisted locally
 
-async function loadPriceData() {
+// ── CoinGecko — fetch prices + 24h % change ──
+async function fetchPrices() {
   try {
-    const res = await fetch(API_PRICE);
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price' +
+      '?ids=bitcoin,ethereum,solana,binancecoin,ripple,cardano,avalanche-2' +
+      '&vs_currencies=usd&include_24hr_change=true'
+    );
+    if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
     const data = await res.json();
-    if (data.prices) {
-      P = data.prices.reduce((acc, item) => {
-        acc[item.symbol] = {
-          p: item.price,
-          c: 0,
-          d: 0,
-          time: item.time,
-        };
-        return acc;
-      }, {});
-      renderSB();
-    }
+
+    Object.entries(COINGECKO_MAP).forEach(([id, sym]) => {
+      const coin = data[id];
+      if (!coin) return;
+      if (!P[sym]) P[sym] = { p: 0, c: 0, d: 0 };
+      P[sym].p = coin.usd;
+      P[sym].c = +(coin.usd_24h_change || 0).toFixed(2);
+      P[sym].d = P[sym].c >= 0 ? 1 : -1;
+    });
+
+    renderSB();
   } catch (e) {
-    console.error('Failed to load price data', e);
+    console.error('CoinGecko fetch failed:', e);
   }
 }
 
-const WS_ASSETS = {
-  bitcoin: 'BTC',
-  ethereum: 'ETH',
-  solana: 'SOL',
-};
-
-function connectPriceSocket() {
-  const ws = new WebSocket('wss://ws.coincap.io/prices?assets=bitcoin,ethereum,solana');
-
-  ws.onopen = () => console.log('CoinCap WS connected');
-
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    let updated = false;
-
-    for (const [coin, value] of Object.entries(data)) {
-      const symbol = WS_ASSETS[coin];
-      if (!symbol || !P[symbol]) continue;
-
-      const next = parseFloat(value);
-      if (Number.isNaN(next)) continue;
-
-      const prev = P[symbol].p || next;
-      P[symbol].c = prev === 0 ? 0 : ((next - prev) / prev) * 100;
-      P[symbol].d = P[symbol].c >= 0 ? 1 : -1;
-      P[symbol].p = next;
-      updated = true;
-    }
-
-    if (updated) renderSB();
-  };
-
-  ws.onerror = (err) => console.error('CoinCap WS error', err);
-  ws.onclose = () => {
-    console.warn('CoinCap WS closed, reconnecting in 5s');
-    setTimeout(connectPriceSocket, 5000);
-  };
-}
-
-
-// ── Price sidebar ────────────────────────────
+// ── Sidebar ──────────────────────────────────
 function fmtP(p) {
   if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (p >= 1)    return '$' + p.toFixed(2);
@@ -288,31 +579,201 @@ function fmtP(p) {
 
 function renderSB() {
   document.getElementById('sb').innerHTML = Object.entries(P).map(([s, d]) => `
-    <div class="tkr">
+    <div class="tkr" onclick="qs('Phân tích chi tiết xu hướng kỹ thuật và tin tức của ${s}/USD gần đây')">
       <div class="tkr-sym">${s}/USD</div>
       <div class="tkr-price ${d.d > 0 ? 'up' : 'dn'}">${fmtP(d.p)}</div>
       <div class="tkr-chg  ${d.d > 0 ? 'up' : 'dn'}">${d.d > 0 ? '▲' : '▼'} ${Math.abs(d.c).toFixed(2)}%</div>
     </div>`).join('');
 }
 
-// ── Chat ─────────────────────────────────────
-function escape(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ── Local Storage Notes Controller ──────────────────────────────────
+function loadNotes() {
+  const saved = localStorage.getItem('crypto_agent_notes_local');
+  if (saved) {
+    try {
+      notes = JSON.parse(saved);
+    } catch (e) {
+      notes = [];
+    }
+  } else {
+    // Default system seed notes
+    notes = [
+      {
+        id: '1',
+        content: "Chiến thuật DCA tháng này: Ưu tiên gom ETH quanh mốc hỗ trợ cứng. Không dùng margin thời điểm này.",
+        time: "10:14:00"
+      }
+    ];
+  }
+  renderNotes();
 }
+
+function saveNotesToStorage() {
+  localStorage.setItem('crypto_agent_notes_local', JSON.stringify(notes));
+  renderNotes();
+}
+
+function renderNotes() {
+  const container = document.getElementById('nbList');
+  if (!container) return;
+
+  if (notes.length === 0) {
+    container.innerHTML = `<div class="nb-empty">SỔ TAY TRỐNG<br><br><span style="font-size: 9px; color: #2e3444">Hãy lưu thông tin quan trọng từ AI hoặc tự nhập ghi chú của bạn.</span></div>`;
+    return;
+  }
+
+  container.innerHTML = notes.map(n => `
+    <div class="nb-item">
+      <div class="nb-item-content">${escape(n.content)}</div>
+      <div class="nb-item-meta">
+        <span>${n.time}</span>
+        <div class="nb-item-tools">
+          <button class="nb-item-action" onclick="askAboutNote('${escapeJS(n.content)}')">Hỏi AI</button>
+          <button class="nb-item-action" onclick="copyNote('${escapeJS(n.content)}')">Copy</button>
+          <button class="nb-item-action del" onclick="deleteNote('${n.id}')">Xóa</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Add note manually
+function saveManualNote() {
+  const textarea = document.getElementById('nbText');
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  const newNote = {
+    id: Date.now().toString(),
+    content: text,
+    time: new Date().toTimeString().slice(0, 8)
+  };
+
+  notes.unshift(newNote);
+  saveNotesToStorage();
+  
+  textarea.value = '';
+  showToast('Đã lưu vào sổ tay');
+}
+
+// Quick-add note extracted from AI message
+function saveNoteFromAI(text) {
+  const newNote = {
+    id: Date.now().toString(),
+    content: text,
+    time: new Date().toTimeString().slice(0, 8)
+  };
+
+  notes.unshift(newNote);
+  saveNotesToStorage();
+
+  // Auto-expand notebook if collapsed
+  const col = document.getElementById('nbCol');
+  if (col.classList.contains('collapsed')) {
+    toggleNotebook();
+  }
+  showToast('Đã lưu phân tích của AI vào sổ tay');
+}
+
+function deleteNote(id) {
+  notes = notes.filter(n => n.id !== id);
+  saveNotesToStorage();
+  showToast('Đã xóa ghi chú');
+}
+
+function clearAllNotes() {
+  if (confirm('Bạn có chắc chắn muốn xóa sạch sổ tay cá nhân không?')) {
+    notes = [];
+    saveNotesToStorage();
+    showToast('Đã dọn dẹp sổ tay');
+  }
+}
+
+// Send note back to the chatbox for deeper processing
+function askAboutNote(text) {
+  const formattedQuery = `Dựa trên ghi chú này: "${text}". Hãy phân tích sâu hơn hoặc đưa ra giải pháp thực tế cho tôi.`;
+  qs(formattedQuery);
+}
+
+// Copy note to Clipboard
+function copyNote(text) {
+  const tempInput = document.createElement('textarea');
+  tempInput.value = text;
+  document.body.appendChild(tempInput);
+  tempInput.select();
+  document.execCommand('copy');
+  document.body.removeChild(tempInput);
+  showToast('Đã copy nội dung ghi chú');
+}
+
+// Toggle notebook panel
+function toggleNotebook() {
+  const col = document.getElementById('nbCol');
+  const root = document.getElementById('root');
+  
+  col.classList.toggle('collapsed');
+  
+  if (col.classList.contains('collapsed')) {
+    root.style.width = '840px';
+  } else {
+    root.style.width = '1120px';
+  }
+}
+
+// Simple Toast Notification
+function showToast(msg) {
+  const container = document.getElementById('toastContainer');
+  container.innerHTML = `<div class="toast">${msg.toUpperCase()}</div>`;
+}
+
+// ── Chat Helpers ─────────────────────────────
+function escape(t) {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeJS(str) {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
 function fmt(t) {
   return escape(t)
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g,   '<em>$1</em>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>');
 }
 
-function addMsg(role, html) {
+function addMsg(role, rawText, isHtml = false) {
   const isUser = role === 'user';
   const el = document.createElement('div');
   el.className = 'msg ' + (isUser ? 'msg-u' : 'msg-a');
+  
+  const contentHtml = isHtml ? rawText : fmt(rawText);
+  
+  const actionHtml = (!isUser && rawText !== '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>') ? `
+    <div class="msg-actions">
+      <button class="act-btn" onclick="saveNoteFromAI('${escapeJS(rawText)}')">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+        Lưu vào Sổ tay
+      </button>
+    </div>
+  ` : '';
+
   el.innerHTML = `
     <div class="lbl ${isUser ? 'lbl-r' : ''}">${isUser ? 'YOU' : 'CRYPTO AGENT'}</div>
-    <div class="bbl ${isUser ? 'bbl-u' : 'bbl-a'}">${html}</div>`;
+    <div class="bbl ${isUser ? 'bbl-u' : 'bbl-a'}">${contentHtml}</div>
+    ${actionHtml}`;
+    
   const c = document.getElementById('msgs');
   c.appendChild(el);
   c.scrollTop = c.scrollHeight;
@@ -327,13 +788,13 @@ async function send() {
   el.value = '';
 
   hist.push({ role: 'user', content: txt });
-  addMsg('user', escape(txt));
+  addMsg('user', txt);
 
   busy = true;
   document.getElementById('sbtn').disabled = true;
 
   const loader = addMsg('assistant',
-    '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>');
+    '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>', true);
 
   try {
     const res = await fetch(API_CHAT, {
@@ -343,14 +804,16 @@ async function send() {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Chat request failed');
+    if (!res.ok) throw new Error(data.error || 'Yêu cầu trò chuyện thất bại');
 
-    const reply = data.reply || 'Không có phản hồi.';
+    const reply = data.reply || 'Không nhận được phản hồi.';
     hist.push({ role: 'assistant', content: reply });
-    loader.querySelector('.bbl').innerHTML = fmt(reply);
+    
+    loader.remove();
+    addMsg('assistant', reply);
 
   } catch (e) {
-    loader.querySelector('.bbl').textContent = 'Connection error. Please try again.';
+    loader.querySelector('.bbl').textContent = 'Lỗi kết nối. Vui lòng thử lại.';
     console.error(e);
   }
 
@@ -366,6 +829,14 @@ document.getElementById('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
+// Toggle drawer shortcut using [Tab]
+window.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    toggleNotebook();
+  }
+});
+
 // ── Clock ────────────────────────────────────
 function tick() {
   document.getElementById('clk').textContent = new Date().toTimeString().slice(0, 8);
@@ -373,10 +844,11 @@ function tick() {
 
 // ── Init ─────────────────────────────────────
 async function init() {
-  await loadPriceData();
-  connectPriceSocket();
+  await fetchPrices();
+  setInterval(fetchPrices, 30000);
   tick();
   setInterval(tick, 1000);
+  loadNotes();
 }
 
 init();
