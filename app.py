@@ -51,6 +51,10 @@ def oauth_is_configured() -> bool:
     return bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
 
 
+def self_auth_is_configured() -> bool:
+    return bool(SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD)
+
+
 def verify_id_token(id_token: str) -> dict:
     """Verify a Google ID token (JWT) via Google's tokeninfo endpoint.
     Returns the token payload as a dict on success or raises Exception on failure.
@@ -260,6 +264,7 @@ def auth_me():
         "authenticated": bool(user),
         "user": user,
         "oauthConfigured": oauth_is_configured(),
+        "selfAuthConfigured": self_auth_is_configured(),
         "loginUrl": url_for("oauth_login"),
         "jwtLoginUrl": url_for("jwt_login"),
         "selfLoginUrl": url_for("self_login"),

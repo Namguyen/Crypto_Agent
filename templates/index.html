@@ -628,7 +628,8 @@ const AUTH_LOGIN = '/auth/google/login';
 const AUTH_LOGOUT = '/auth/logout';
 const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
 const LOGIN_PLACEHOLDER = 'Login with Google to chat with Crypto Agent...';
-const SETUP_PLACEHOLDER = 'Configure Google OAuth env vars, then restart Flask...';
+const LOCAL_LOGIN_PLACEHOLDER = 'Login locally to chat with Crypto Agent...';
+const SETUP_PLACEHOLDER = 'Configure Google OAuth or local auth env vars, then restart Flask...';
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -647,6 +648,7 @@ let authState = {
   authenticated: false,
   user: null,
   oauthConfigured: false,
+  selfAuthConfigured: false,
   loginUrl: AUTH_LOGIN,
   logoutUrl: AUTH_LOGOUT,
 };
@@ -843,6 +845,7 @@ async function loadAuthState() {
       authenticated: false,
       user: null,
       oauthConfigured: false,
+      selfAuthConfigured: false,
       loginUrl: AUTH_LOGIN,
       logoutUrl: AUTH_LOGOUT,
     };
@@ -861,6 +864,8 @@ function syncChatControls() {
 
   if (authState.authenticated) {
     inp.placeholder = CHAT_PLACEHOLDER;
+  } else if (authState.selfAuthConfigured) {
+    inp.placeholder = LOCAL_LOGIN_PLACEHOLDER;
   } else if (authState.oauthConfigured) {
     inp.placeholder = LOGIN_PLACEHOLDER;
   } else {
@@ -873,6 +878,7 @@ function renderAuthState() {
   const avatar = document.getElementById('authAvatar');
   const name = document.getElementById('authName');
   const btn = document.getElementById('authBtn');
+  const devBtn = document.getElementById('devBtn');
   if (!box || !avatar || !name || !btn) return;
 
   box.classList.toggle('signed-in', authState.authenticated);
@@ -889,10 +895,22 @@ function renderAuthState() {
       avatar.style.display = 'none';
     }
   } else {
-    name.textContent = authState.oauthConfigured ? 'GUEST' : 'OAUTH SETUP';
-    btn.textContent = authState.oauthConfigured ? 'LOGIN' : 'SETUP';
+    if (authState.oauthConfigured) {
+      name.textContent = 'GUEST';
+      btn.textContent = 'LOGIN';
+    } else if (authState.selfAuthConfigured) {
+      name.textContent = 'LOCAL AUTH';
+      btn.textContent = 'LOCAL';
+    } else {
+      name.textContent = 'AUTH SETUP';
+      btn.textContent = 'SETUP';
+    }
     avatar.removeAttribute('src');
     avatar.style.display = 'none';
+  }
+
+  if (devBtn) {
+    devBtn.style.display = authState.oauthConfigured ? '' : 'none';
   }
 
   syncChatControls();
@@ -902,6 +920,10 @@ async function handleAuthClick() {
   if (!authState.authenticated) {
     if (window.GOOGLE_CLIENT_ID && authState.jwtLoginUrl) {
       try { google.accounts.id.prompt(); } catch (e) { window.location.href = authState.loginUrl || AUTH_LOGIN; }
+      return;
+    }
+    if (authState.selfAuthConfigured) {
+      await devLoginPrompt();
       return;
     }
     window.location.href = authState.loginUrl || AUTH_LOGIN;
@@ -994,7 +1016,7 @@ function addMsg(role, rawText, isHtml = false) {
 async function send() {
   if (busy) return;
   if (!authState.authenticated) {
-    showToast(authState.oauthConfigured ? 'Login required' : 'OAuth setup required');
+    showToast(authState.selfAuthConfigured ? 'Local login required' : (authState.oauthConfigured ? 'Login required' : 'Auth setup required'));
     return;
   }
   const el  = document.getElementById('inp');
