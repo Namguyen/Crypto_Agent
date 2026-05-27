@@ -1,7 +1,7 @@
 import requests
-from price_history import keep_track, show_history
-from alert import add_alert, remove_alert, list_alerts, reset_alert
-from internet_search import search_crypto_news
+from backend.ai.alert import add_alert, list_alerts, remove_alert, reset_alert
+from backend.ai.internet_search import search_crypto_news
+from backend.ai.price_history import keep_track, show_history
 # Tool functions — actual logic
 def get_crypto_price(coin_name: str) -> str:
     """Fetch live price from CoinGecko and log it."""
