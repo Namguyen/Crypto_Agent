@@ -2,11 +2,11 @@ import os
 from tavily import TavilyClient
 
 def search_crypto_news(query: str) -> str:
-    """Tìm kiếm tin tức và thông tin mới nhất về crypto bằng Tavily API."""
+    """Search the latest crypto news and updates using the Tavily API."""
     # Khởi tạo Tavily Client (nên đặt ở ngoài để tối ưu)
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:
-        return "Lỗi: Chưa cấu hình TAVILY_API_KEY trong file .env"
+        return "Error: TAVILY_API_KEY not configured in .env"
     
     client = TavilyClient(api_key=api_key)
     
@@ -29,21 +29,21 @@ def search_crypto_news(query: str) -> str:
         results = response.get('results', [])
         
         if not results and not answer:
-            return f"Rất tiếc, tôi không tìm thấy tin tức mới nhất về '{query}'."
-        
-        output = f"📰 **Kết quả tìm kiếm tin tức về '{query}'**\n\n"
-        
+            return f"Sorry, I couldn't find recent news about '{query}'."
+
+        output = f"📰 **Search results for '{query}'**\n\n"
+
         if answer:
-            output += f"📌 **Tóm tắt:** {answer}\n\n"
-        
-        output += "🔍 **Các bài viết liên quan:**\n"
+            output += f"📌 **Summary:** {answer}\n\n"
+
+        output += "🔍 **Related articles:**\n"
         for i, item in enumerate(results, 1):
-            title = item.get('title', 'Không có tiêu đề')
+            title = item.get('title', 'No title')
             url = item.get('url', '#')
             content = item.get('content', '')[:200]  # Lấy 200 ký tự đầu
             output += f"{i}. **{title}**\n   📎 {url}\n   📄 {content}...\n\n"
         
         return output
     except Exception as e:
-        return f"Lỗi khi kết nối tới Tavily API: {e}"
+        return f"Error connecting to Tavily API: {e}"
 

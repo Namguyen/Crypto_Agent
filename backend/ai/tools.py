@@ -12,17 +12,17 @@ def get_crypto_price(coin_name: str) -> str:
     try:
         data = requests.get(url, timeout=8).json()
         if coin_name.lower() not in data:
-            return f" Không tìm thấy coin '{coin_name}' trên CoinGecko."
+            return f"Coin '{coin_name}' not found on CoinGecko."
         usd = data[coin_name.lower()]["usd"]
         vnd = data[coin_name.lower()]["vnd"]
         keep_track(coin_name, usd, vnd)
         return (
-            f"Giá {coin_name.upper()} hôm nay:\n"
+            f"Price for {coin_name.upper()} today:\n"
             f"  - USD: ${usd:,.2f}\n"
-            f"  - VND: {vnd:,.0f} đ"
+            f"  - VND: {vnd:,.0f} VND"
         )
     except Exception as e:
-        return f"Lỗi kết nối CoinGecko: {e}"
+        return f"CoinGecko connection error: {e}"
 
 
 def get_price_history(coin: str = "", limit: int = 10) -> str:
@@ -145,13 +145,13 @@ TOOL_SCHEMA = [
     "type": "function",
     "function": {
         "name": "search_crypto_news",
-        "description": "Tìm kiếm tin tức mới nhất và thông tin cập nhật về thị trường tiền điện tử (crypto) bằng Tavily. Dùng khi người dùng hỏi về tin tức, sự kiện, xu hướng hoặc bất kỳ thông tin thời sự nào liên quan đến crypto.",
+        "description": "Search the latest news and updates about the cryptocurrency market using Tavily. Use when the user asks about news, events, trends, or timely information related to crypto.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Câu hỏi hoặc từ khóa về tin tức crypto mà người dùng muốn tìm kiếm. Ví dụ: 'giá bitcoin hôm nay', 'tin tức về Ethereum', 'xu hướng DeFi mới nhất'",
+                    "description": "The query or keywords for crypto news the user wants to search. Example: 'bitcoin price today', 'news about Ethereum', 'latest DeFi trends'",
                 }
             },
             "required": ["query"],

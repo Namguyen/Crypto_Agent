@@ -80,11 +80,11 @@ def _check_alert(alert):
 def _trigger_alert(alert, current_price):
     """Do something when an alert fires: print, log, optionally inject into agent."""
     coin = alert["coin"].upper()
-    condition = "lên trên" if alert["condition"] == "above" else "xuống dưới"
+    condition = "rose above" if alert["condition"] == "above" else "fell below"
     message = (
-        f"\n🔔 ALERT: {coin} đã {condition} ${alert['price']:,.2f}!\n"
-        f"   Giá hiện tại: ${current_price:,.2f}\n"
-        f"   (Được tạo lúc: {alert['created_at']})\n"
+        f"\n🔔 ALERT: {coin} {condition} ${alert['price']:,.2f}!\n"
+        f"   Current price: ${current_price:,.2f}\n"
+        f"   (Created at: {alert['created_at']})\n"
     )
     print(message)
     # Optional: write to an alert log file
@@ -147,7 +147,7 @@ def add_alert(coin: str, condition: str, price: float) -> str:
         }
         alerts.append(new_alert)
         _save_alerts(alerts)
-    return f" Đã thêm cảnh báo: {coin.upper()} {condition} ${price:,.2f}"
+    return f"Added alert: {coin.upper()} {condition} ${price:,.2f}"
 
 def remove_alert(alert_id: str) -> str:
     """Remove an alert by its ID."""
@@ -155,24 +155,24 @@ def remove_alert(alert_id: str) -> str:
         alerts = _load_alerts()
         new_alerts = [a for a in alerts if a["id"] != alert_id]
         if len(new_alerts) == len(alerts):
-            return f"Không tìm thấy cảnh báo với ID '{alert_id}'"
+            return f"No alert found with ID '{alert_id}'"
         _save_alerts(new_alerts)
-    return f"Đã xóa cảnh báo ID: {alert_id}"
+    return f"Deleted alert ID: {alert_id}"
 
 def list_alerts() -> str:
     """Return a formatted string of all active (including triggered) alerts."""
     with _alerts_lock:
         alerts = _load_alerts()
     if not alerts:
-        return "Chưa có cảnh báo nào."
+        return "No alerts set."
 
-    lines = [" Danh sách cảnh báo:"]
+    lines = ["Alert list:"]
     for a in alerts:
-        status = "Đã kích hoạt" if a.get("triggered") else "Đang theo dõi"
+        status = "Triggered" if a.get("triggered") else "Active"
         lines.append(
             f"  ID: {a['id']}\n"
             f"     Coin: {a['coin'].upper()} | {a['condition']} ${a['price']:,.2f} | {status}\n"
-            f"     Tạo lúc: {a['created_at']}"
+            f"     Created at: {a['created_at']}"
         )
     return "\n".join(lines)
 
@@ -193,7 +193,7 @@ def reset_alert(alert_id: str = None, coin: str = None) -> str:
                     changed = True
                     break
             if not changed:
-                return f"Không tìm thấy cảnh báo đã kích hoạt với ID '{alert_id}'"
+                return f"No triggered alert found with ID '{alert_id}'"
         elif coin:
             coin_lower = coin.lower()
             for a in alerts:
@@ -202,9 +202,9 @@ def reset_alert(alert_id: str = None, coin: str = None) -> str:
                     a.pop("triggered_at", None)
                     changed = True
             if not changed:
-                return f"Không có cảnh báo nào đã kích hoạt cho {coin.upper()}"
+                return f"No triggered alerts for {coin.upper()}"
         else:
-            return "Cần cung cấp alert_id hoặc coin để reset."
+            return "You must provide alert_id or coin to reset."
         if changed:
             _save_alerts(alerts)
-    return f"Đã reset cảnh báo cho {coin.upper() if coin else alert_id}"
+    return f"Reset alert for {coin.upper() if coin else alert_id}"

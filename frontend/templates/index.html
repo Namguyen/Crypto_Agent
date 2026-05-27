@@ -498,7 +498,7 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
-        SỔ TAY [TAB]
+        NOTEBOOK [TAB]
       </button>
       <span class="live-badge">MARKETS LIVE</span>
       <span class="clock" id="clk">--:--:--</span>
@@ -525,9 +525,9 @@
         <div class="msg msg-a">
           <div class="lbl">CRYPTO AGENT</div>
           <div class="bbl bbl-a">
-            CRYPTO AGENT online. Hãy hỏi tôi về giá cả, xu hướng thị trường hoặc thông tin on-chain.
+            CRYPTO AGENT online. Ask me about prices, market trends, or on-chain data.
             <br><br>
-            💾 <strong>Sổ tay Offline:</strong> Toàn bộ dữ liệu ghi chú của bạn được lưu an toàn trực tiếp trên máy này qua bộ nhớ trình duyệt!
+            💾 <strong>Offline Notebook:</strong> All of your note data is stored locally in this browser's storage!
           </div>
         </div>
       </div>
@@ -536,7 +536,7 @@
       <div class="input-row">
         <div class="inp-wrap">
           <input class="inp" id="inp" type="text"
-            placeholder="Đặt câu hỏi, tra cứu giá, tin tức thị trường..." autocomplete="off" />
+            placeholder="Ask a question, look up prices, market news..." autocomplete="off" />
         </div>
         <button class="sbtn" id="sbtn" onclick="send()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -556,7 +556,7 @@
             <path d="M12 20h9"></path>
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
           </svg>
-          SỔ TAY CÁ NHÂN
+          PERSONAL NOTEBOOK
         </span>
         <div class="nb-actions">
           <button class="nb-header-btn" onclick="clearAllNotes()" title="Xóa toàn bộ">Clear</button>
@@ -566,13 +566,13 @@
 
       <!-- Manual Note Input Box -->
       <div class="nb-editor">
-        <textarea class="nb-textarea" id="nbText" placeholder="Ghi lại chiến lược, dự phóng, hoặc dán ghi chú vào đây..."></textarea>
-        <button class="nb-save-btn" id="saveBtn" onclick="saveManualNote()">LƯU VÀO SỔ TAY</button>
+          <textarea class="nb-textarea" id="nbText" placeholder="Record strategy, forecasts, or paste notes here..."></textarea>
+        <button class="nb-save-btn" id="saveBtn" onclick="saveManualNote()">SAVE TO NOTEBOOK</button>
       </div>
 
       <!-- Saved Notes List -->
       <div class="nb-list" id="nbList">
-        <div class="nb-empty">ĐANG TẢI DỮ LIỆU...</div>
+        <div class="nb-empty">LOADING DATA...</div>
       </div>
     </div>
   </div>
@@ -659,7 +659,7 @@ function fmtP(p) {
 
 function renderSB() {
   document.getElementById('sb').innerHTML = Object.entries(P).map(([s, d]) => `
-    <div class="tkr" onclick="qs('Phân tích chi tiết xu hướng kỹ thuật và tin tức của ${s}/USD gần đây')">
+    <div class="tkr" onclick="qs('Detailed technical trend analysis and recent news for ${s}/USD')">
       <div class="tkr-sym">${s}/USD</div>
       <div class="tkr-price ${d.d > 0 ? 'up' : 'dn'}">${fmtP(d.p)}</div>
       <div class="tkr-chg  ${d.d > 0 ? 'up' : 'dn'}">${d.d > 0 ? '▲' : '▼'} ${Math.abs(d.c).toFixed(2)}%</div>
@@ -683,7 +683,7 @@ function legacySeedNotes() {
     notes = [
       {
         id: '1',
-        content: "Chiến thuật DCA tháng này: Ưu tiên gom ETH quanh mốc hỗ trợ cứng. Không dùng margin thời điểm này.",
+        content: "This month's DCA strategy: prioritize accumulating ETH around strong support levels. Avoid using margin at this time.",
         time: "10:14:00"
       }
     ];
@@ -700,7 +700,7 @@ function renderNotes() {
   if (!container) return;
 
   if (notes.length === 0) {
-    container.innerHTML = `<div class="nb-empty">SỔ TAY TRỐNG<br><br><span style="font-size: 9px; color: #2e3444">Hãy lưu thông tin quan trọng từ AI hoặc tự nhập ghi chú của bạn.</span></div>`;
+    container.innerHTML = `<div class="nb-empty">NOTEBOOK EMPTY<br><br><span style="font-size: 9px; color: #2e3444">Save important info from the AI or type your notes here.</span></div>`;
     return;
   }
 
@@ -710,9 +710,9 @@ function renderNotes() {
       <div class="nb-item-meta">
         <span>${n.time}</span>
         <div class="nb-item-tools">
-          <button class="nb-item-action" onclick="askAboutNote('${escapeJS(n.content)}')">Hỏi AI</button>
+          <button class="nb-item-action" onclick="askAboutNote('${escapeJS(n.content)}')">Ask AI</button>
           <button class="nb-item-action" onclick="copyNote('${escapeJS(n.content)}')">Copy</button>
-          <button class="nb-item-action del" onclick="deleteNote('${n.id}')">Xóa</button>
+          <button class="nb-item-action del" onclick="deleteNote('${n.id}')">Delete</button>
         </div>
       </div>
     </div>
@@ -735,7 +735,7 @@ function saveManualNote() {
   saveNotesToStorage();
   
   textarea.value = '';
-  showToast('Đã lưu vào sổ tay');
+  showToast('Saved to notebook');
 }
 
 // Quick-add note extracted from AI message
@@ -754,20 +754,20 @@ function saveNoteFromAI(text) {
   if (col.classList.contains('collapsed')) {
     toggleNotebook();
   }
-  showToast('Đã lưu phân tích của AI vào sổ tay');
+  showToast('Saved AI analysis to notebook');
 }
 
 function deleteNote(id) {
   notes = notes.filter(n => n.id !== id);
   saveNotesToStorage();
-  showToast('Đã xóa ghi chú');
+  showToast('Note deleted');
 }
 
 function clearAllNotes() {
-  if (confirm('Bạn có chắc chắn muốn xóa sạch sổ tay cá nhân không?')) {
+  if (confirm('Are you sure you want to clear your personal notebook?')) {
     notes = [];
     saveNotesToStorage();
-    showToast('Đã dọn dẹp sổ tay');
+    showToast('Notebook cleared');
   }
 }
 
@@ -811,7 +811,7 @@ async function saveManualNote() {
     notes.unshift(data.note);
     renderNotes();
     textarea.value = '';
-    showToast('ÄÃ£ lÆ°u vÃ o sá»• tay');
+    showToast('Saved to notebook');
   } catch (e) {
     showToast(e.message || 'Could not save note');
   }
@@ -842,7 +842,7 @@ async function saveNoteFromAI(text) {
   if (col.classList.contains('collapsed')) {
     toggleNotebook();
   }
-  showToast('ÄÃ£ lÆ°u phÃ¢n tÃ­ch cá»§a AI vÃ o sá»• tay');
+  showToast('Saved AI analysis to notebook');
 }
 
 async function deleteNote(id) {
@@ -854,14 +854,14 @@ async function deleteNote(id) {
     }
     notes = notes.filter(n => n.id !== id);
     renderNotes();
-    showToast('ÄÃ£ xÃ³a ghi chÃº');
+    showToast('Note deleted');
   } catch (e) {
     showToast(e.message || 'Could not delete note');
   }
 }
 
 async function clearAllNotes() {
-  if (!confirm('Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a sáº¡ch sá»• tay cÃ¡ nhÃ¢n khÃ´ng?')) return;
+  if (!confirm('Are you sure you want to clear your personal notebook?')) return;
   try {
     const res = await authFetch(API_NOTES, { method: 'DELETE' });
     if (!res.ok) {
@@ -870,7 +870,7 @@ async function clearAllNotes() {
     }
     notes = [];
     renderNotes();
-    showToast('ÄÃ£ dá»n dáº¹p sá»• tay');
+    showToast('Notebook cleared');
   } catch (e) {
     showToast(e.message || 'Could not clear notes');
   }
@@ -878,7 +878,7 @@ async function clearAllNotes() {
 
 // Send note back to the chatbox for deeper processing
 function askAboutNote(text) {
-  const formattedQuery = `Dựa trên ghi chú này: "${text}". Hãy phân tích sâu hơn hoặc đưa ra giải pháp thực tế cho tôi.`;
+  const formattedQuery = `Based on this note: "${text}". Please analyze it further or suggest practical actions.`;
   qs(formattedQuery);
 }
 
@@ -890,7 +890,7 @@ function copyNote(text) {
   tempInput.select();
   document.execCommand('copy');
   document.body.removeChild(tempInput);
-  showToast('Đã copy nội dung ghi chú');
+  showToast('Note content copied');
 }
 
 // Toggle notebook panel
@@ -1097,7 +1097,7 @@ function addMsg(role, rawText, isHtml = false) {
           <polyline points="17 21 17 13 7 13 7 21"></polyline>
           <polyline points="7 3 7 8 15 8"></polyline>
         </svg>
-        Lưu vào Sổ tay
+        Save to Notebook
       </button>
     </div>
   ` : '';
@@ -1149,7 +1149,7 @@ async function send() {
     }
     if (!res.ok) throw new Error(data.error || 'Chat request failed');
 
-    const reply = data.reply || 'Không nhận được phản hồi.';
+    const reply = data.reply || 'No response received.';
     hist.push({ role: 'assistant', content: reply });
     
     loader.remove();

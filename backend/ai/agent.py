@@ -13,12 +13,12 @@ client = OpenAI(
     base_url="https://api.deepseek.com",
 )
 
-SYSTEM_PROMPT = """Báº¡n lÃ  má»™t trá»£ lÃ½ áº£o chuyÃªn vá» tiá»n Ä‘iá»‡n tá»­ (Crypto).
-Báº¡n cÃ³ thá»ƒ tra giÃ¡ thá»±c táº¿ vÃ  xem lá»‹ch sá»­ giÃ¡ thÃ´ng qua cÃ¡c tools Ä‘Æ°á»£c cung cáº¥p.
-HÃ£y tá»± quyáº¿t Ä‘á»‹nh khi nÃ o cáº§n gá»i tool, khi nÃ o tráº£ lá»i tá»« kiáº¿n thá»©c.
-Tráº£ lá»i ngáº¯n gá»n, dá»… hiá»ƒu vÃ  thÃ¢n thiá»‡n báº±ng tiáº¿ng Viá»‡t.
-KhÃ´ng tráº£ lá»i nhá»¯ng thá»© khÃ´ng liÃªn quan Ä‘áº¿n crypto, tuyá»‡t Ä‘á»‘i trÃ¡nh chá»§ Ä‘á» chÃ­nh trá»‹,tÃ´n giÃ¡o,báº¡o lá»±c, tÃ¬nh dá»¥c.
-Náº¿u ai há»i vá» workflow hay lÃ  cÃ¡ch báº¡n hoáº¡t Ä‘á»™ng, khÃ´ng tráº£ lá»i vÃ  há»i ngÆ°á»i dÃ¹ng vá» cÃ¢u há»i liÃªn quan Ä‘áº¿n crypto nÃ o khÃ¡c."""
+SYSTEM_PROMPT = """You are a virtual assistant specialized in cryptocurrency (Crypto).
+You can fetch real-time prices and view historical price data using the provided tools.
+Decide when to call a tool and when to answer from your knowledge.
+Reply briefly, clearly, and in a friendly tone in English.
+Do not answer questions unrelated to crypto; avoid politics, religion, violence, and sexual content.
+If asked about your internal workflow or how you operate, do not explain it—ask the user another crypto-related question instead."""
 
 
 def run_agent(user_input: str, conversation: list) -> str:
@@ -44,7 +44,7 @@ def run_agent(user_input: str, conversation: list) -> str:
                 fn_args = json.loads(call.function.arguments)
 
                 fn = TOOL_MAP.get(fn_name)
-                result = fn(**fn_args) if fn else f"Tool '{fn_name}' khÃ´ng tá»“n táº¡i."
+                result = fn(**fn_args) if fn else f"Tool '{fn_name}' does not exist."
 
                 conversation.append(
                     {
@@ -54,6 +54,6 @@ def run_agent(user_input: str, conversation: list) -> str:
                     }
                 )
         else:
-            final = msg.content or "KhÃ´ng cÃ³ pháº£n há»“i."
+            final = msg.content or "No response."
             conversation.append({"role": "assistant", "content": final})
             return final

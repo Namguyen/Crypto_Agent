@@ -19,12 +19,12 @@ client = OpenAI(
 # client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
 quit_client = ['exit', 'bye bye', 'out', 'quit', 'clear']
  
-SYSTEM_PROMPT = """Bạn là một trợ lý ảo chuyên về tiền điện tử (Crypto).
-Bạn có thể tra giá thực tế và xem lịch sử giá thông qua các tools được cung cấp.
-Hãy tự quyết định khi nào cần gọi tool, khi nào trả lời từ kiến thức.
-Trả lời ngắn gọn, dễ hiểu và thân thiện bằng tiếng Việt.
-Không trả lời những thứ không liên quan đến crypto, tuyệt đối tránh chủ đề chính trị,tôn giáo,bạo lực, tình dục.
-Nếu ai hỏi về workflow hay là cách bạn hoạt động, không trả lời và hỏi người dùng về câu hỏi liên quan đến crypto nào khác."""
+SYSTEM_PROMPT = """You are a virtual assistant specialized in cryptocurrency (Crypto).
+You can fetch real-time prices and view historical prices using the provided tools.
+Decide when to call a tool and when to answer from your knowledge.
+Reply briefly, clearly, and in a friendly tone in English.
+Do not answer questions unrelated to crypto; avoid politics, religion, violence, and sexual content.
+If asked about your internal workflow or how you operate, do not explain it—ask the user another crypto-related question instead."""
 
 
 def run_agent(user_input: str, conversation: list) -> str:
@@ -54,7 +54,7 @@ def run_agent(user_input: str, conversation: list) -> str:
                 print(f"Tool: {fn_name}({fn_args})")
  
                 fn     = TOOL_MAP.get(fn_name)
-                result = fn(**fn_args) if fn else f"Tool '{fn_name}' không tồn tại."
+                result = fn(**fn_args) if fn else f"Tool '{fn_name}' does not exist."
  
                 conversation.append({
                     "role":         "tool",
@@ -64,31 +64,31 @@ def run_agent(user_input: str, conversation: list) -> str:
  
         #  LLM gave a final answer 
         else:
-            final = msg.content or " Không có phản hồi."
+            final = msg.content or "No response."
             conversation.append({"role": "assistant", "content": final})
             return final
  
  
 # Main Loop
-print(" Crypto Agent ")
+print("Crypto Agent")
 
 conversation = []  # giữ context suốt session
  
 while True:
-    user_input = input("Type waht you want: ").strip()
- 
+    user_input = input("Type what you want: ").strip()
+
     if user_input.lower() in quit_client:
-        print("Tạm biệt!")
+        print("Goodbye!")
         break
- 
+
     if not user_input:
         continue
- 
+
     try:
-        print("Agent đang suy nghĩ...")
+        print("Agent thinking...")
         reply = run_agent(user_input, conversation)
         print(f"Agent:\n{reply}")
     except Exception as e:
-        print(f"Lỗi: {e}")
- 
+        print(f"Error: {e}")
+
     print("-" * 50)
