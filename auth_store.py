@@ -62,6 +62,17 @@ def init_auth_db() -> None:
                 ON refresh_tokens(user_id);
             CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
                 ON refresh_tokens(expires_at);
+
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notes_user_id_created_at
+                ON notes(user_id, created_at DESC);
             """
         )
 
@@ -218,3 +229,57 @@ def cleanup_expired_refresh_tokens() -> None:
             """,
             (now,),
         )
+
+
+def public_note(row: sqlite3.Row | dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "content": row["content"],
+        "time": time.strftime("%H:%M:%S", time.localtime(int(row["created_at"]))),
+        "createdAt": int(row["created_at"]),
+    }
+
+
+def list_notes(user_id: int | str) -> list[dict]:
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM notes
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            """,
+            (str(user_id),),
+        ).fetchall()
+    return [public_note(row) for row in rows]
+
+
+def create_note(user_id: int | str, content: str) -> dict:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO notes (user_id, content, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (str(user_id), content, now),
+        )
+        note_id = cursor.lastrowid
+        row = conn.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
+    return public_note(row)
+
+
+def delete_note(user_id: int | str, note_id: int | str) -> None:
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            DELETE FROM notes
+            WHERE id = ? AND user_id = ?
+            """,
+            (str(note_id), str(user_id)),
+        )
+
+
+def delete_all_notes(user_id: int | str) -> None:
+    with auth_connection() as conn:
+        conn.execute("DELETE FROM notes WHERE user_id = ?", (str(user_id),))

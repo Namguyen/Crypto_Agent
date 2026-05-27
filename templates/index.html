@@ -581,41 +581,7 @@
 <!-- Toast notifications -->
 <div id="toastContainer"></div>
 
-<!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-
 <script>
-window.GOOGLE_CLIENT_ID = "{{ google_client_id }}";
-
-function handleCredentialResponse(response) {
-  const id_token = response && response.credential;
-  if (!id_token) return;
-  fetch('/auth/jwt-login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_token }),
-  }).then(r => {
-    if (r.ok) window.location.reload();
-    else r.json().then(j => showToast(j.error || 'Login failed'));
-  }).catch(() => showToast('Login failed'));
-}
-
-function initGoogleIdentity() {
-  if (!window.GOOGLE_CLIENT_ID) return;
-  try {
-    google.accounts.id.initialize({
-      client_id: window.GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-      auto_select: false,
-    });
-  } catch (e) {
-    console.warn('Google Identity init failed', e);
-  }
-}
-
-initGoogleIdentity();
-
-
 // ─────────────────────────────────────────────
 //  CONFIG & LOCAL NOTEBOOK STATE
 // ─────────────────────────────────────────────
@@ -627,12 +593,12 @@ const API_AUTH_ME = '/api/auth/me';
 const API_AUTH_LOGIN = '/api/auth/login';
 const API_AUTH_REGISTER = '/api/auth/register';
 const API_AUTH_REFRESH = '/api/auth/refresh';
-const AUTH_LOGIN = '/auth/google/login';
+const API_NOTES = '/api/notes';
+const AUTH_LOGIN = '/login';
+const AUTH_REGISTER = '/register';
 const AUTH_LOGOUT = '/api/auth/logout';
 const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
-const LOGIN_PLACEHOLDER = 'Login with Google to chat with Crypto Agent...';
-const LOCAL_LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
-const SETUP_PLACEHOLDER = 'Configure Google OAuth or local auth env vars, then restart Flask...';
+const LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -650,10 +616,9 @@ let busy = false;
 let authState = {
   authenticated: false,
   user: null,
-  oauthConfigured: false,
-  selfAuthConfigured: false,
   registrationEnabled: false,
   loginUrl: AUTH_LOGIN,
+  registerUrl: AUTH_REGISTER,
   logoutUrl: AUTH_LOGOUT,
 };
 let accessToken = null;
@@ -702,8 +667,11 @@ function renderSB() {
 }
 
 // ── Local Storage Notes Controller ──────────────────────────────────
-function loadNotes() {
-  const saved = localStorage.getItem('crypto_agent_notes_local');
+function legacySeedNotes() {
+  notes = [];
+  renderNotes();
+  return;
+  const saved = null;
   if (saved) {
     try {
       notes = JSON.parse(saved);
@@ -724,7 +692,6 @@ function loadNotes() {
 }
 
 function saveNotesToStorage() {
-  localStorage.setItem('crypto_agent_notes_local', JSON.stringify(notes));
   renderNotes();
 }
 
@@ -801,6 +768,111 @@ function clearAllNotes() {
     notes = [];
     saveNotesToStorage();
     showToast('Đã dọn dẹp sổ tay');
+  }
+}
+
+// Authenticated per-user notebook storage
+async function loadNotes() {
+  if (!authState.authenticated) {
+    notes = [];
+    renderNotes();
+    return;
+  }
+
+  try {
+    const res = await authFetch(API_NOTES);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not load notes');
+    notes = data.notes || [];
+  } catch (e) {
+    notes = [];
+    showToast(e.message || 'Could not load notes');
+  }
+  renderNotes();
+}
+
+async function saveManualNote() {
+  const textarea = document.getElementById('nbText');
+  const text = textarea.value.trim();
+  if (!text) return;
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+
+  try {
+    const res = await authFetch(API_NOTES, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save note');
+    notes.unshift(data.note);
+    renderNotes();
+    textarea.value = '';
+    showToast('ÄÃ£ lÆ°u vÃ o sá»• tay');
+  } catch (e) {
+    showToast(e.message || 'Could not save note');
+  }
+}
+
+async function saveNoteFromAI(text) {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+
+  try {
+    const res = await authFetch(API_NOTES, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save note');
+    notes.unshift(data.note);
+    renderNotes();
+  } catch (e) {
+    showToast(e.message || 'Could not save note');
+    return;
+  }
+
+  const col = document.getElementById('nbCol');
+  if (col.classList.contains('collapsed')) {
+    toggleNotebook();
+  }
+  showToast('ÄÃ£ lÆ°u phÃ¢n tÃ­ch cá»§a AI vÃ o sá»• tay');
+}
+
+async function deleteNote(id) {
+  try {
+    const res = await authFetch(`${API_NOTES}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Could not delete note');
+    }
+    notes = notes.filter(n => n.id !== id);
+    renderNotes();
+    showToast('ÄÃ£ xÃ³a ghi chÃº');
+  } catch (e) {
+    showToast(e.message || 'Could not delete note');
+  }
+}
+
+async function clearAllNotes() {
+  if (!confirm('Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a sáº¡ch sá»• tay cÃ¡ nhÃ¢n khÃ´ng?')) return;
+  try {
+    const res = await authFetch(API_NOTES, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Could not clear notes');
+    }
+    notes = [];
+    renderNotes();
+    showToast('ÄÃ£ dá»n dáº¹p sá»• tay');
+  } catch (e) {
+    showToast(e.message || 'Could not clear notes');
   }
 }
 
@@ -900,10 +972,9 @@ async function loadAuthState() {
     authState = {
       authenticated: false,
       user: null,
-      oauthConfigured: false,
-      selfAuthConfigured: false,
       registrationEnabled: false,
       loginUrl: AUTH_LOGIN,
+      registerUrl: AUTH_REGISTER,
       logoutUrl: AUTH_LOGOUT,
     };
     console.error('Auth state failed:', e);
@@ -921,12 +992,8 @@ function syncChatControls() {
 
   if (authState.authenticated) {
     inp.placeholder = CHAT_PLACEHOLDER;
-  } else if (authState.selfAuthConfigured) {
-    inp.placeholder = LOCAL_LOGIN_PLACEHOLDER;
-  } else if (authState.oauthConfigured) {
-    inp.placeholder = LOGIN_PLACEHOLDER;
   } else {
-    inp.placeholder = SETUP_PLACEHOLDER;
+    inp.placeholder = LOGIN_PLACEHOLDER;
   }
 }
 
@@ -952,16 +1019,8 @@ function renderAuthState() {
       avatar.style.display = 'none';
     }
   } else {
-    if (authState.selfAuthConfigured) {
-      name.textContent = 'AUTH';
-      btn.textContent = 'LOGIN';
-    } else if (authState.oauthConfigured) {
-      name.textContent = 'GUEST';
-      btn.textContent = 'LOGIN';
-    } else {
-      name.textContent = 'AUTH SETUP';
-      btn.textContent = 'SETUP';
-    }
+    name.textContent = 'AUTH';
+    btn.textContent = 'LOGIN';
     avatar.removeAttribute('src');
     avatar.style.display = 'none';
   }
@@ -975,14 +1034,6 @@ function renderAuthState() {
 
 async function handleAuthClick() {
   if (!authState.authenticated) {
-    if (authState.selfAuthConfigured) {
-      await localLoginPrompt();
-      return;
-    }
-    if (window.GOOGLE_CLIENT_ID && authState.jwtLoginUrl) {
-      try { google.accounts.id.prompt(); } catch (e) { window.location.href = authState.loginUrl || AUTH_LOGIN; }
-      return;
-    }
     window.location.href = authState.loginUrl || AUTH_LOGIN;
     return;
   }
@@ -993,62 +1044,19 @@ async function handleAuthClick() {
     accessToken = null;
     authState.authenticated = false;
     authState.user = null;
+    notes = [];
     renderAuthState();
+    renderNotes();
     showToast('Logged out');
   }
 }
 
 async function localLoginPrompt() {
-  const login = prompt('Username or email:', 'admin');
-  if (!login) return;
-  const password = prompt('Password:', '');
-  if (password === null) return;
-  try {
-    const res = await fetch(API_AUTH_LOGIN, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ login, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Login failed');
-      return;
-    }
-    applyAuthPayload(data);
-    renderAuthState();
-    showToast('Logged in');
-  } catch (e) {
-    showToast('Login failed');
-  }
+  window.location.href = authState.loginUrl || AUTH_LOGIN;
 }
 
 async function registerPrompt() {
-  if (!authState.registrationEnabled) return;
-  const username = prompt('New username:', '');
-  if (!username) return;
-  const email = prompt('Email (optional):', '') || '';
-  const password = prompt('Password, minimum 8 characters:', '');
-  if (password === null) return;
-
-  try {
-    const res = await fetch(API_AUTH_REGISTER, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ username, email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Registration failed');
-      return;
-    }
-    applyAuthPayload(data);
-    renderAuthState();
-    showToast('Account created');
-  } catch (e) {
-    showToast('Registration failed');
-  }
+  window.location.href = authState.registerUrl || AUTH_REGISTER;
 }
 
 // ── Chat Helpers ─────────────────────────────
@@ -1108,7 +1116,7 @@ function addMsg(role, rawText, isHtml = false) {
 async function send() {
   if (busy) return;
   if (!authState.authenticated) {
-    showToast(authState.selfAuthConfigured ? 'Local login required' : (authState.oauthConfigured ? 'Login required' : 'Auth setup required'));
+    showToast('Login required');
     return;
   }
   const el  = document.getElementById('inp');
@@ -1184,7 +1192,7 @@ async function init() {
   setInterval(fetchPrices, 30000);
   tick();
   setInterval(tick, 1000);
-  loadNotes();
+  await loadNotes();
 }
 
 init();

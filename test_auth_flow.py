@@ -79,6 +79,61 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("accessToken", data)
             self.assertEqual(data["user"]["username"], "newuser")
 
+    def test_auth_pages_render_forms(self):
+        with self.app.test_client() as client:
+            login = client.get("/login")
+            self.assertEqual(login.status_code, 200)
+            self.assertIn(b'id="authForm"', login.data)
+            self.assertIn(b'/api/auth/login', login.data)
+
+            register = client.get("/register")
+            self.assertEqual(register.status_code, 200)
+            self.assertIn(b'id="authForm"', register.data)
+            self.assertIn(b'/api/auth/register', register.data)
+
+    def test_notes_are_scoped_to_user(self):
+        seed_client = self.app.test_client()
+        other_client = self.app.test_client()
+
+        seed_login = seed_client.post(
+            "/api/auth/login",
+            json={"login": "seed", "password": "password123"},
+        )
+        self.assertEqual(seed_login.status_code, 200)
+        seed_token = seed_login.get_json()["accessToken"]
+
+        seed_note = seed_client.post(
+            "/api/notes",
+            json={"content": "seed-only datapoint"},
+            headers={"Authorization": f"Bearer {seed_token}"},
+        )
+        self.assertEqual(seed_note.status_code, 201)
+
+        other_register = other_client.post(
+            "/api/auth/register",
+            json={
+                "username": "notesuser",
+                "email": "notesuser@example.com",
+                "password": "password123",
+            },
+        )
+        self.assertEqual(other_register.status_code, 201)
+        other_token = other_register.get_json()["accessToken"]
+
+        other_notes = other_client.get(
+            "/api/notes",
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        self.assertEqual(other_notes.status_code, 200)
+        self.assertEqual(other_notes.get_json()["notes"], [])
+
+        seed_notes = seed_client.get(
+            "/api/notes",
+            headers={"Authorization": f"Bearer {seed_token}"},
+        )
+        self.assertEqual(seed_notes.status_code, 200)
+        self.assertEqual(seed_notes.get_json()["notes"][0]["content"], "seed-only datapoint")
+
     def test_missing_auth_blocks_chat(self):
         with self.app.test_client() as client:
             res = client.post("/api/chat", json={})

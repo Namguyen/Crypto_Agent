@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} | Crypto Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #070810;
+      color: #c8cdd8;
+      font-family: "Courier New", Courier, monospace;
+    }
+    .auth-shell {
+      width: min(420px, calc(100vw - 32px));
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      border-radius: 8px;
+      padding: 26px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #ef9f27;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .16em;
+      margin-bottom: 24px;
+    }
+    .brand::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef9f27;
+    }
+    h1 {
+      font-size: 18px;
+      letter-spacing: .04em;
+      margin-bottom: 8px;
+    }
+    .sub {
+      color: #6b7488;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #6b7488;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    input {
+      width: 100%;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      background: #0f1219;
+      color: #c8cdd8;
+      font: inherit;
+      font-size: 13px;
+      letter-spacing: 0;
+      padding: 11px 12px;
+      outline: none;
+    }
+    input:focus {
+      border-color: rgba(239,159,39,.55);
+    }
+    button {
+      height: 40px;
+      border: none;
+      border-radius: 6px;
+      background: #ef9f27;
+      color: #0b0d11;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .error {
+      min-height: 18px;
+      color: #d35d6e;
+      font-size: 11px;
+      line-height: 1.5;
+      margin-top: 12px;
+    }
+    .links {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 18px;
+      font-size: 11px;
+    }
+    a {
+      color: #ef9f27;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <main class="auth-shell">
+    <div class="brand">CRYPTO AGENT_</div>
+    <h1>{{ title }}</h1>
+    <p class="sub">Use your local account to access the agent, notebook, and saved data.</p>
+
+    <form id="authForm">
+      <label>
+        Username{% if mode == 'login' %} or email{% endif %}
+        <input id="username" name="username" autocomplete="username" required />
+      </label>
+
+      {% if mode == 'register' %}
+      <label>
+        Email
+        <input id="email" name="email" type="email" autocomplete="email" />
+      </label>
+      {% endif %}
+
+      <label>
+        Password
+        <input id="password" name="password" type="password" autocomplete="{% if mode == 'login' %}current-password{% else %}new-password{% endif %}" required />
+      </label>
+
+      <button id="submitBtn" type="submit">{{ title }}</button>
+    </form>
+
+    <div class="error" id="errorBox"></div>
+
+    <div class="links">
+      <a href="/">Back to app</a>
+      <a href="{{ switch_url }}">{{ switch_label }}</a>
+    </div>
+  </main>
+
+  <script>
+    const mode = "{{ mode }}";
+    const apiUrl = "{{ api_url }}";
+    const registrationEnabled = {{ registration_enabled|tojson }};
+    const form = document.getElementById('authForm');
+    const errorBox = document.getElementById('errorBox');
+    const submitBtn = document.getElementById('submitBtn');
+
+    async function redirectIfSignedIn() {
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        if (res.ok) window.location.replace('/');
+      } catch (e) {
+        // Stay on the auth page.
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorBox.textContent = '';
+
+      if (mode === 'register' && !registrationEnabled) {
+        errorBox.textContent = 'Registration is disabled.';
+        return;
+      }
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const payload = mode === 'register'
+        ? {
+            username,
+            email: document.getElementById('email').value.trim(),
+            password,
+          }
+        : { login: username, password };
+
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errorBox.textContent = data.error || 'Authentication failed.';
+          return;
+        }
+        window.location.replace('/');
+      } catch (e) {
+        errorBox.textContent = 'Authentication failed.';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    redirectIfSignedIn();
+  </script>
+</body>
+</html>
