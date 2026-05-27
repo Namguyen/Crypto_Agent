@@ -73,6 +73,21 @@ def init_auth_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_notes_user_id_created_at
                 ON notes(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS user_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                reply TEXT,
+                status TEXT NOT NULL,
+                error TEXT,
+                duration_ms INTEGER,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_requests_user_id_created_at
+                ON user_requests(user_id, created_at DESC);
             """
         )
 
@@ -283,3 +298,94 @@ def delete_note(user_id: int | str, note_id: int | str) -> None:
 def delete_all_notes(user_id: int | str) -> None:
     with auth_connection() as conn:
         conn.execute("DELETE FROM notes WHERE user_id = ?", (str(user_id),))
+
+
+def log_user_request(
+    user_id: int | str,
+    message: str,
+    reply: Optional[str],
+    status: str,
+    error: Optional[str],
+    duration_ms: Optional[int],
+) -> None:
+    now = int(time.time())
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_requests
+                (user_id, message, reply, status, error, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(user_id), message, reply, status, error, duration_ms, now),
+        )
+
+
+def list_admin_users() -> list[dict]:
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                u.id,
+                u.username,
+                u.email,
+                u.created_at,
+                u.updated_at,
+                COUNT(DISTINCT n.id) AS notes_count,
+                COUNT(DISTINCT ur.id) AS requests_count
+            FROM users u
+            LEFT JOIN notes n ON n.user_id = u.id
+            LEFT JOIN user_requests ur ON ur.user_id = u.id
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+            """
+        ).fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "username": row["username"],
+            "email": row["email"] or "",
+            "createdAt": int(row["created_at"]),
+            "updatedAt": int(row["updated_at"]),
+            "notesCount": int(row["notes_count"]),
+            "requestsCount": int(row["requests_count"]),
+        }
+        for row in rows
+    ]
+
+
+def list_admin_request_logs(limit: int = 100) -> list[dict]:
+    safe_limit = max(1, min(int(limit or 100), 500))
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                ur.id,
+                ur.user_id,
+                u.username,
+                ur.message,
+                ur.reply,
+                ur.status,
+                ur.error,
+                ur.duration_ms,
+                ur.created_at
+            FROM user_requests ur
+            JOIN users u ON u.id = ur.user_id
+            ORDER BY ur.created_at DESC, ur.id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "userId": str(row["user_id"]),
+            "username": row["username"],
+            "message": row["message"],
+            "reply": row["reply"] or "",
+            "status": row["status"],
+            "error": row["error"] or "",
+            "durationMs": row["duration_ms"],
+            "createdAt": int(row["created_at"]),
+        }
+        for row in rows
+    ]

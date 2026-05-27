@@ -4,11 +4,13 @@ import os
 import re
 import secrets
 import time
-from functools import wraps
 from pathlib import Path
+from typing import Optional
 
 import dotenv
-from flask import Flask, g, jsonify, render_template, request
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 
 try:
     import jwt
@@ -25,7 +27,10 @@ from backend.auth.store import (
     get_refresh_token,
     get_user_by_id,
     init_auth_db,
+    list_admin_request_logs,
+    list_admin_users,
     list_notes,
+    log_user_request,
     revoke_refresh_token,
     store_refresh_token,
     upsert_env_user,
@@ -36,10 +41,11 @@ dotenv.load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-app = Flask(__name__, template_folder=str(PROJECT_ROOT / "frontend" / "templates"))
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or secrets.token_hex(32)
+app = FastAPI(title="Crypto Agent")
+templates = Jinja2Templates(directory=str(PROJECT_ROOT / "frontend" / "templates"))
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or app.secret_key
+APP_SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or secrets.token_hex(32)
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or APP_SECRET_KEY
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "900"))
 ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET") or JWT_SECRET_KEY
@@ -70,8 +76,8 @@ def registration_is_enabled() -> bool:
     return AUTH_ALLOW_REGISTRATION
 
 
-def json_error(message: str, status: int):
-    return jsonify({"error": message}), status
+def json_error(message: str, status: int) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status)
 
 
 def hash_token(token: str) -> str:
@@ -139,35 +145,35 @@ def decode_refresh_token(token: str) -> dict:
     return payload
 
 
-def set_refresh_cookie(response, refresh_token: str):
+def set_refresh_cookie(response: JSONResponse, refresh_token: str) -> None:
     response.set_cookie(
         REFRESH_COOKIE_NAME,
         refresh_token,
         max_age=REFRESH_TOKEN_EXP_SECONDS,
         httponly=True,
         secure=AUTH_COOKIE_SECURE,
-        samesite="Strict",
+        samesite="strict",
         path=REFRESH_COOKIE_PATH,
     )
 
 
-def clear_refresh_cookie(response):
+def clear_refresh_cookie(response: JSONResponse) -> None:
     response.delete_cookie(
         REFRESH_COOKIE_NAME,
         path=REFRESH_COOKIE_PATH,
-        samesite="Strict",
+        samesite="strict",
         secure=AUTH_COOKIE_SECURE,
     )
 
 
-def request_ip() -> str:
+def request_ip(request: Request) -> str:
     forwarded_for = request.headers.get("X-Forwarded-For", "")
     if forwarded_for:
         return forwarded_for.split(",", 1)[0].strip()
-    return request.remote_addr or ""
+    return request.client.host if request.client else ""
 
 
-def create_refresh_token_record(user: dict) -> tuple[str, str]:
+def create_refresh_token_record(user: dict, request: Request) -> tuple[str, str]:
     jti = secrets.token_hex(16)
     refresh_token = sign_refresh_token(user, jti)
     store_refresh_token(
@@ -175,41 +181,41 @@ def create_refresh_token_record(user: dict) -> tuple[str, str]:
         token_hash=hash_token(refresh_token),
         jti=jti,
         expires_at=int(time.time()) + REFRESH_TOKEN_EXP_SECONDS,
-        ip=request_ip(),
+        ip=request_ip(request),
         user_agent=request.headers.get("User-Agent", ""),
     )
     return refresh_token, jti
 
 
-def issue_auth_response(user: dict, status_code: int = 200):
+def issue_auth_response(user: dict, request: Request, status_code: int = 200) -> JSONResponse:
     access_token = sign_access_token(user)
-    refresh_token, _ = create_refresh_token_record(user)
-    response = jsonify(
+    refresh_token, _ = create_refresh_token_record(user, request)
+    response = JSONResponse(
         {
             "ok": True,
             "accessToken": access_token,
             "expiresIn": ACCESS_TOKEN_EXP_SECONDS,
             "user": user,
-        }
+        },
+        status_code=status_code,
     )
-    response.status_code = status_code
     set_refresh_cookie(response, refresh_token)
     return response
 
 
-def bearer_token() -> str:
+def bearer_token(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return ""
     return auth_header.split(" ", 1)[1].strip()
 
 
-def authenticate_request() -> tuple[dict | None, str | None]:
-    token = bearer_token()
+def authenticate_request(request: Request) -> tuple[Optional[dict], Optional[str]]:
+    token = bearer_token(request)
     if token:
         try:
             user = decode_access_token(token)
-            g.current_user = user
+            request.state.current_user = user
             return user, None
         except jwt.ExpiredSignatureError:
             return None, "Access token expired"
@@ -218,8 +224,17 @@ def authenticate_request() -> tuple[dict | None, str | None]:
     return None, None
 
 
-def current_user():
-    user, _ = authenticate_request()
+def current_user(request: Request) -> Optional[dict]:
+    if hasattr(request.state, "current_user"):
+        return request.state.current_user
+    user, _ = authenticate_request(request)
+    return user
+
+
+def require_user(request: Request) -> dict | JSONResponse:
+    user, auth_error = authenticate_request(request)
+    if not user:
+        return json_error(auth_error or "Login required", 401)
     return user
 
 
@@ -227,32 +242,12 @@ def conversation_key_for_user(user: dict) -> str:
     return f"{user.get('provider', 'local')}:{user['id']}"
 
 
-def get_conversation_history() -> list:
-    user = current_user()
-    if not user:
-        return []
+def get_conversation_history(user: dict) -> list:
     key = conversation_key_for_user(user)
     return conversation_histories.setdefault(key, [])
 
 
-def login_required(view):
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        user, auth_error = authenticate_request()
-        if not user:
-            return jsonify(
-                {
-                    "error": auth_error or "Login required",
-                    "loginUrl": "/login",
-                    "refreshUrl": "/api/auth/refresh",
-                }
-            ), 401
-        return view(*args, **kwargs)
-
-    return wrapped
-
-
-def load_history():
+def load_history() -> list:
     history_path = PROJECT_ROOT / "crypto_history.json"
     if not history_path.exists():
         return []
@@ -263,7 +258,7 @@ def load_history():
         return []
 
 
-def price_sidebar_data():
+def price_sidebar_data() -> list[dict]:
     history = load_history()
     latest = {}
     for item in history:
@@ -280,41 +275,40 @@ def price_sidebar_data():
     return list(latest.values())
 
 
-@app.route("/api/price-data")
+@app.get("/api/price-data")
 def price_data():
-    return jsonify({"prices": price_sidebar_data()})
+    return {"prices": price_sidebar_data()}
 
 
-@app.route("/api/auth/me")
-def auth_me():
-    user, auth_error = authenticate_request()
-    return jsonify(
-        {
-            "authenticated": bool(user),
-            "user": user,
-            "authError": auth_error,
-            "registrationEnabled": registration_is_enabled(),
-            "accessTokenTtlSeconds": ACCESS_TOKEN_EXP_SECONDS,
-            "loginUrl": "/login",
-            "registerUrl": "/register",
-            "refreshUrl": "/api/auth/refresh",
-            "logoutUrl": "/api/auth/logout",
-        }
-    )
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    user, auth_error = authenticate_request(request)
+    return {
+        "authenticated": bool(user),
+        "user": user,
+        "authError": auth_error,
+        "registrationEnabled": registration_is_enabled(),
+        "accessTokenTtlSeconds": ACCESS_TOKEN_EXP_SECONDS,
+        "loginUrl": "/login",
+        "registerUrl": "/register",
+        "refreshUrl": "/api/auth/refresh",
+        "logoutUrl": "/api/auth/logout",
+    }
 
 
-@app.route("/api/users/me")
-@login_required
-def user_me():
-    return jsonify({"user": current_user()})
+@app.get("/api/users/me")
+def user_me(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"user": user}
 
 
-@app.route("/api/auth/register", methods=["POST"])
-def auth_register():
+@app.post("/api/auth/register")
+async def auth_register(request: Request):
     if not registration_is_enabled():
         return json_error("Registration is disabled", 403)
 
-    data = request.get_json(silent=True) or {}
+    data = await request.json()
     username = (data.get("username") or "").strip()
     email = (data.get("email") or "").strip()
     password = data.get("password") or ""
@@ -330,12 +324,12 @@ def auth_register():
         user = create_user(username, email, password)
     except ValueError as exc:
         return json_error(str(exc), 409)
-    return issue_auth_response(user, status_code=201)
+    return issue_auth_response(user, request, status_code=201)
 
 
-@app.route("/api/auth/login", methods=["POST"])
-def auth_login_api():
-    data = request.get_json(silent=True) or {}
+@app.post("/api/auth/login")
+async def auth_login_api(request: Request):
+    data = await request.json()
     login = (data.get("login") or data.get("username") or data.get("email") or "").strip()
     password = data.get("password") or ""
     if not login or not password:
@@ -344,11 +338,11 @@ def auth_login_api():
     user = verify_user_password(login, password)
     if not user:
         return json_error("Invalid credentials", 401)
-    return issue_auth_response(user)
+    return issue_auth_response(user, request)
 
 
-@app.route("/api/auth/refresh", methods=["POST"])
-def auth_refresh():
+@app.post("/api/auth/refresh")
+def auth_refresh(request: Request):
     refresh_token = request.cookies.get(REFRESH_COOKIE_NAME, "")
     if not refresh_token:
         return json_error("Missing refresh token", 401)
@@ -358,31 +352,26 @@ def auth_refresh():
         payload = decode_refresh_token(refresh_token)
     except jwt.ExpiredSignatureError:
         revoke_refresh_token(token_hash)
-        response = jsonify({"error": "Refresh token expired"})
-        response.status_code = 401
+        response = json_error("Refresh token expired", 401)
         clear_refresh_cookie(response)
         return response
     except jwt.InvalidTokenError:
-        response = jsonify({"error": "Invalid refresh token"})
-        response.status_code = 401
+        response = json_error("Invalid refresh token", 401)
         clear_refresh_cookie(response)
         return response
 
     record = get_refresh_token(token_hash, payload["jti"])
     if not record:
-        response = jsonify({"error": "Refresh token not recognized"})
-        response.status_code = 401
+        response = json_error("Refresh token not recognized", 401)
         clear_refresh_cookie(response)
         return response
     if record["revoked_at"]:
-        response = jsonify({"error": "Refresh token revoked"})
-        response.status_code = 401
+        response = json_error("Refresh token revoked", 401)
         clear_refresh_cookie(response)
         return response
     if int(record["expires_at"]) < int(time.time()):
         revoke_refresh_token(token_hash)
-        response = jsonify({"error": "Refresh token expired"})
-        response.status_code = 401
+        response = json_error("Refresh token expired", 401)
         clear_refresh_cookie(response)
         return response
 
@@ -396,10 +385,10 @@ def auth_refresh():
         "provider": "local",
     }
     access_token = sign_access_token(user)
-    new_refresh_token, new_jti = create_refresh_token_record(user)
+    new_refresh_token, new_jti = create_refresh_token_record(user, request)
     revoke_refresh_token(token_hash, replaced_by=new_jti)
 
-    response = jsonify(
+    response = JSONResponse(
         {
             "ok": True,
             "accessToken": access_token,
@@ -411,94 +400,129 @@ def auth_refresh():
     return response
 
 
-@app.route("/api/auth/logout", methods=["POST"])
-def auth_logout():
-    user = current_user()
+@app.post("/api/auth/logout")
+def auth_logout(request: Request):
+    user = current_user(request)
     refresh_token = request.cookies.get(REFRESH_COOKIE_NAME, "")
     if refresh_token:
         revoke_refresh_token(hash_token(refresh_token))
     if user:
         conversation_histories.pop(conversation_key_for_user(user), None)
 
-    response = jsonify({"ok": True})
+    response = JSONResponse({"ok": True})
     clear_refresh_cookie(response)
     return response
 
 
-@app.route("/api/notes", methods=["GET"])
-@login_required
-def notes_list():
-    return jsonify({"notes": list_notes(current_user()["id"])})
+@app.get("/api/notes")
+def notes_list(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"notes": list_notes(user["id"])}
 
 
-@app.route("/api/notes", methods=["POST"])
-@login_required
-def notes_create():
-    data = request.get_json(silent=True) or {}
+@app.post("/api/notes")
+async def notes_create(request: Request, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    data = await request.json()
     content = (data.get("content") or "").strip()
     if not content:
         return json_error("Note content is required", 400)
     if len(content) > 5000:
         return json_error("Note content is too long", 400)
-    return jsonify({"note": create_note(current_user()["id"], content)}), 201
+    return JSONResponse({"note": create_note(user["id"], content)}, status_code=201)
 
 
-@app.route("/api/notes/<note_id>", methods=["DELETE"])
-@login_required
-def notes_delete(note_id):
-    delete_note(current_user()["id"], note_id)
-    return jsonify({"ok": True})
+@app.delete("/api/notes/{note_id}")
+def notes_delete(note_id: str, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    delete_note(user["id"], note_id)
+    return {"ok": True}
 
 
-@app.route("/api/notes", methods=["DELETE"])
-@login_required
-def notes_clear():
-    delete_all_notes(current_user()["id"])
-    return jsonify({"ok": True})
+@app.delete("/api/notes")
+def notes_clear(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    delete_all_notes(user["id"])
+    return {"ok": True}
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    return templates.TemplateResponse(request, "index.html")
 
 
-@app.route("/login")
-def login_page():
-    return render_template(
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(
+        request,
         "auth.html",
-        mode="login",
-        title="Login",
-        api_url="/api/auth/login",
-        switch_url="/register",
-        switch_label="Create account",
-        registration_enabled=registration_is_enabled(),
+        {
+            "mode": "login",
+            "title": "Login",
+            "api_url": "/api/auth/login",
+            "switch_url": "/register",
+            "switch_label": "Create account",
+            "registration_enabled": registration_is_enabled(),
+        },
     )
 
 
-@app.route("/register")
-def register_page():
-    return render_template(
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse(
+        request,
         "auth.html",
-        mode="register",
-        title="Register",
-        api_url="/api/auth/register",
-        switch_url="/login",
-        switch_label="Back to login",
-        registration_enabled=registration_is_enabled(),
+        {
+            "mode": "register",
+            "title": "Register",
+            "api_url": "/api/auth/register",
+            "switch_url": "/login",
+            "switch_label": "Back to login",
+            "registration_enabled": registration_is_enabled(),
+        },
     )
 
 
-@app.route("/api/chat", methods=["POST"])
-@login_required
-def chat():
-    data = request.get_json(silent=True) or {}
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return templates.TemplateResponse(request, "admin.html")
+
+
+@app.get("/api/admin/users")
+def admin_users(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"users": list_admin_users()}
+
+
+@app.get("/api/admin/request-logs")
+def admin_request_logs(limit: int = 100, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"logs": list_admin_request_logs(limit)}
+
+
+@app.post("/api/chat")
+async def chat(request: Request, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    data = await request.json()
     user_input = data.get("message", "").strip()
 
     if not user_input:
-        return jsonify({"error": "Empty message"}), 400
+        return json_error("Empty message", 400)
 
+    started_at = time.perf_counter()
     try:
-        reply = run_agent(user_input, get_conversation_history())
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        reply = run_agent(user_input, get_conversation_history(user))
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        log_user_request(user["id"], user_input, reply, "ok", None, duration_ms)
+        return {"reply": reply}
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        log_user_request(user["id"], user_input, None, "error", str(exc), duration_ms)
+        return json_error(str(exc), 500)

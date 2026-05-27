@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin | Crypto Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #070810;
+      color: #c8cdd8;
+      font-family: "Courier New", Courier, monospace;
+      padding: 24px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    .brand {
+      color: #ef9f27;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .16em;
+    }
+    .links { display: flex; gap: 12px; align-items: center; }
+    a, button {
+      color: #ef9f27;
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      padding: 8px 10px;
+      text-decoration: none;
+    }
+    button:hover, a:hover { border-color: rgba(239,159,39,.55); }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) 1fr;
+      gap: 18px;
+    }
+    section {
+      border-top: 1px solid #1a1e28;
+      padding-top: 14px;
+      min-width: 0;
+    }
+    h1 { font-size: 17px; margin-bottom: 6px; }
+    h2 {
+      color: #ef9f27;
+      font-size: 11px;
+      letter-spacing: .12em;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    .meta { color: #6b7488; font-size: 11px; margin-bottom: 14px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      font-size: 11px;
+    }
+    th, td {
+      border-bottom: 1px solid #1a1e28;
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: #6b7488;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    tr:last-child td { border-bottom: none; }
+    .truncate {
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-ok { color: #4a9e6a; }
+    .status-error { color: #d35d6e; }
+    .empty {
+      color: #6b7488;
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      padding: 16px;
+      font-size: 12px;
+    }
+    @media (max-width: 900px) {
+      body { padding: 16px; }
+      .grid { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">CRYPTO AGENT_ADMIN</div>
+      <h1>Database Users & Request Logs</h1>
+      <p class="meta">Sensitive password and token hashes are never shown here.</p>
+    </div>
+    <div class="links">
+      <a href="/">App</a>
+      <a href="/login">Login</a>
+      <button onclick="refreshAll()">Refresh</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section>
+      <h2>Users</h2>
+      <div id="users"></div>
+    </section>
+    <section>
+      <h2>Request Logs</h2>
+      <div id="logs"></div>
+    </section>
+  </main>
+
+  <script>
+    let accessToken = null;
+
+    function esc(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function fmtTime(epoch) {
+      if (!epoch) return '';
+      return new Date(epoch * 1000).toLocaleString();
+    }
+
+    async function refreshAccessToken() {
+      const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.accessToken) return false;
+      accessToken = data.accessToken;
+      return true;
+    }
+
+    async function adminFetch(url, retry = true) {
+      const headers = {};
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      const res = await fetch(url, { headers, credentials: 'same-origin' });
+      if (res.status === 401 && retry && await refreshAccessToken()) return adminFetch(url, false);
+      return res;
+    }
+
+    function renderUsers(users) {
+      const root = document.getElementById('users');
+      if (!users.length) {
+        root.innerHTML = '<div class="empty">No users found.</div>';
+        return;
+      }
+      root.innerHTML = `
+        <table>
+          <thead><tr><th>ID</th><th>User</th><th>Notes</th><th>Requests</th></tr></thead>
+          <tbody>${users.map(u => `
+            <tr>
+              <td>${esc(u.id)}</td>
+              <td>
+                <strong>${esc(u.username)}</strong><br>
+                <span class="meta">${esc(u.email || 'no email')}</span><br>
+                <span class="meta">${fmtTime(u.createdAt)}</span>
+              </td>
+              <td>${esc(u.notesCount)}</td>
+              <td>${esc(u.requestsCount)}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    function renderLogs(logs) {
+      const root = document.getElementById('logs');
+      if (!logs.length) {
+        root.innerHTML = '<div class="empty">No request logs yet. Send a chat message first.</div>';
+        return;
+      }
+      root.innerHTML = `
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th>Status</th><th>Message</th><th>Reply/Error</th><th>MS</th></tr></thead>
+          <tbody>${logs.map(l => `
+            <tr>
+              <td>${fmtTime(l.createdAt)}</td>
+              <td>${esc(l.username)}</td>
+              <td class="${l.status === 'ok' ? 'status-ok' : 'status-error'}">${esc(l.status)}</td>
+              <td class="truncate" title="${esc(l.message)}">${esc(l.message)}</td>
+              <td class="truncate" title="${esc(l.error || l.reply)}">${esc(l.error || l.reply)}</td>
+              <td>${esc(l.durationMs ?? '')}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    async function refreshAll() {
+      const usersRes = await adminFetch('/api/admin/users');
+      const logsRes = await adminFetch('/api/admin/request-logs?limit=100');
+      if (usersRes.status === 401 || logsRes.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+      const usersData = await usersRes.json();
+      const logsData = await logsRes.json();
+      renderUsers(usersData.users || []);
+      renderLogs(logsData.logs || []);
+    }
+
+    refreshAccessToken().finally(refreshAll);
+  </script>
+</body>
+</html>

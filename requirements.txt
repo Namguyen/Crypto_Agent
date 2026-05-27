@@ -1,4 +1,8 @@
-Flask
+fastapi
+uvicorn
+jinja2
+python-multipart
+Werkzeug
 requests
 python-dotenv
 pyjwt

@@ -2,6 +2,8 @@ import os
 import tempfile
 import unittest
 
+from fastapi.testclient import TestClient
+
 
 class AuthFlowTest(unittest.TestCase):
     @classmethod
@@ -21,27 +23,26 @@ class AuthFlowTest(unittest.TestCase):
         import app as app_module
 
         cls.app = app_module.app
-        cls.app.config["TESTING"] = True
 
     @classmethod
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
     def test_seed_user_login_refresh_logout(self):
-        with self.app.test_client() as client:
+        with TestClient(self.app) as client:
             login = client.post(
                 "/api/auth/login",
                 json={"login": "seed", "password": "password123"},
             )
             self.assertEqual(login.status_code, 200)
-            access_token = login.get_json()["accessToken"]
+            access_token = login.json()["accessToken"]
 
             me = client.get(
                 "/api/auth/me",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
-            self.assertTrue(me.get_json()["authenticated"])
-            self.assertEqual(me.get_json()["user"]["username"], "seed")
+            self.assertTrue(me.json()["authenticated"])
+            self.assertEqual(me.json()["user"]["username"], "seed")
 
             protected = client.post(
                 "/api/chat",
@@ -49,11 +50,11 @@ class AuthFlowTest(unittest.TestCase):
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             self.assertEqual(protected.status_code, 400)
-            self.assertEqual(protected.get_json()["error"], "Empty message")
+            self.assertEqual(protected.json()["error"], "Empty message")
 
             refresh = client.post("/api/auth/refresh")
             self.assertEqual(refresh.status_code, 200)
-            self.assertIn("accessToken", refresh.get_json())
+            self.assertIn("accessToken", refresh.json())
 
             logout = client.post(
                 "/api/auth/logout",
@@ -65,7 +66,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(refresh_after_logout.status_code, 401)
 
     def test_register_creates_login_session(self):
-        with self.app.test_client() as client:
+        with TestClient(self.app) as client:
             res = client.post(
                 "/api/auth/register",
                 json={
@@ -75,32 +76,32 @@ class AuthFlowTest(unittest.TestCase):
                 },
             )
             self.assertEqual(res.status_code, 201)
-            data = res.get_json()
+            data = res.json()
             self.assertIn("accessToken", data)
             self.assertEqual(data["user"]["username"], "newuser")
 
     def test_auth_pages_render_forms(self):
-        with self.app.test_client() as client:
+        with TestClient(self.app) as client:
             login = client.get("/login")
             self.assertEqual(login.status_code, 200)
-            self.assertIn(b'id="authForm"', login.data)
-            self.assertIn(b'/api/auth/login', login.data)
+            self.assertIn('id="authForm"', login.text)
+            self.assertIn("/api/auth/login", login.text)
 
             register = client.get("/register")
             self.assertEqual(register.status_code, 200)
-            self.assertIn(b'id="authForm"', register.data)
-            self.assertIn(b'/api/auth/register', register.data)
+            self.assertIn('id="authForm"', register.text)
+            self.assertIn("/api/auth/register", register.text)
 
     def test_notes_are_scoped_to_user(self):
-        seed_client = self.app.test_client()
-        other_client = self.app.test_client()
+        seed_client = TestClient(self.app)
+        other_client = TestClient(self.app)
 
         seed_login = seed_client.post(
             "/api/auth/login",
             json={"login": "seed", "password": "password123"},
         )
         self.assertEqual(seed_login.status_code, 200)
-        seed_token = seed_login.get_json()["accessToken"]
+        seed_token = seed_login.json()["accessToken"]
 
         seed_note = seed_client.post(
             "/api/notes",
@@ -118,27 +119,44 @@ class AuthFlowTest(unittest.TestCase):
             },
         )
         self.assertEqual(other_register.status_code, 201)
-        other_token = other_register.get_json()["accessToken"]
+        other_token = other_register.json()["accessToken"]
 
         other_notes = other_client.get(
             "/api/notes",
             headers={"Authorization": f"Bearer {other_token}"},
         )
         self.assertEqual(other_notes.status_code, 200)
-        self.assertEqual(other_notes.get_json()["notes"], [])
+        self.assertEqual(other_notes.json()["notes"], [])
 
         seed_notes = seed_client.get(
             "/api/notes",
             headers={"Authorization": f"Bearer {seed_token}"},
         )
         self.assertEqual(seed_notes.status_code, 200)
-        self.assertEqual(seed_notes.get_json()["notes"][0]["content"], "seed-only datapoint")
+        self.assertEqual(seed_notes.json()["notes"][0]["content"], "seed-only datapoint")
+
+    def test_admin_pages_and_apis(self):
+        with TestClient(self.app) as client:
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+
+            page = client.get("/admin")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("Database Users & Request Logs", page.text)
+
+            users = client.get("/api/admin/users", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(users.status_code, 200)
+            self.assertGreaterEqual(len(users.json()["users"]), 1)
+
+            logs = client.get("/api/admin/request-logs", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(logs.status_code, 200)
+            self.assertIn("logs", logs.json())
 
     def test_missing_auth_blocks_chat(self):
-        with self.app.test_client() as client:
+        with TestClient(self.app) as client:
             res = client.post("/api/chat", json={})
             self.assertEqual(res.status_code, 401)
-            self.assertEqual(res.get_json()["error"], "Login required")
+            self.assertEqual(res.json()["error"], "Login required")
 
 
 if __name__ == "__main__":
