@@ -485,7 +485,7 @@
         <img class="auth-avatar" id="authAvatar" alt="" />
         <span class="auth-name" id="authName">GUEST</span>
         <button class="auth-btn" id="authBtn" onclick="handleAuthClick()">LOGIN</button>
-        <button class="auth-btn" id="devBtn" style="background:#10202a;border-color:#123;" onclick="devLoginPrompt()">DEV</button>
+        <button class="auth-btn" id="registerBtn" style="background:#10202a;border-color:#123;" onclick="registerPrompt()">REGISTER</button>
       </div>
       <!-- Status Indicator -->
       <span class="db-status">LOCAL SYSTEM ACTIVE</span>
@@ -624,11 +624,14 @@ initGoogleIdentity();
 // ─────────────────────────────────────────────
 const API_CHAT = '/api/chat';
 const API_AUTH_ME = '/api/auth/me';
+const API_AUTH_LOGIN = '/api/auth/login';
+const API_AUTH_REGISTER = '/api/auth/register';
+const API_AUTH_REFRESH = '/api/auth/refresh';
 const AUTH_LOGIN = '/auth/google/login';
-const AUTH_LOGOUT = '/auth/logout';
+const AUTH_LOGOUT = '/api/auth/logout';
 const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
 const LOGIN_PLACEHOLDER = 'Login with Google to chat with Crypto Agent...';
-const LOCAL_LOGIN_PLACEHOLDER = 'Login locally to chat with Crypto Agent...';
+const LOCAL_LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
 const SETUP_PLACEHOLDER = 'Configure Google OAuth or local auth env vars, then restart Flask...';
 
 const COINGECKO_MAP = {
@@ -649,9 +652,11 @@ let authState = {
   user: null,
   oauthConfigured: false,
   selfAuthConfigured: false,
+  registrationEnabled: false,
   loginUrl: AUTH_LOGIN,
   logoutUrl: AUTH_LOGOUT,
 };
+let accessToken = null;
 let notes = []; // Persisted locally
 
 // ── CoinGecko — fetch prices + 24h % change ──
@@ -836,9 +841,60 @@ function showToast(msg) {
   container.innerHTML = `<div class="toast">${msg.toUpperCase()}</div>`;
 }
 
+function applyAuthPayload(data) {
+  if (!data) return;
+  if (data.accessToken) accessToken = data.accessToken;
+  if (data.user) {
+    authState.authenticated = true;
+    authState.user = data.user;
+  }
+}
+
+async function refreshAccessToken() {
+  try {
+    const res = await fetch(API_AUTH_REFRESH, {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.accessToken) {
+      accessToken = null;
+      return false;
+    }
+    applyAuthPayload(data);
+    return true;
+  } catch (e) {
+    accessToken = null;
+    return false;
+  }
+}
+
+async function authFetch(url, options = {}, retry = true) {
+  const headers = new Headers(options.headers || {});
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
+  });
+
+  if (res.status === 401 && retry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return authFetch(url, options, false);
+  }
+  return res;
+}
+
 async function loadAuthState() {
   try {
-    const res = await fetch(API_AUTH_ME);
+    await refreshAccessToken();
+    const headers = {};
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const res = await fetch(API_AUTH_ME, {
+      headers,
+      credentials: 'same-origin',
+    });
     authState = await res.json();
   } catch (e) {
     authState = {
@@ -846,6 +902,7 @@ async function loadAuthState() {
       user: null,
       oauthConfigured: false,
       selfAuthConfigured: false,
+      registrationEnabled: false,
       loginUrl: AUTH_LOGIN,
       logoutUrl: AUTH_LOGOUT,
     };
@@ -878,7 +935,7 @@ function renderAuthState() {
   const avatar = document.getElementById('authAvatar');
   const name = document.getElementById('authName');
   const btn = document.getElementById('authBtn');
-  const devBtn = document.getElementById('devBtn');
+  const registerBtn = document.getElementById('registerBtn');
   if (!box || !avatar || !name || !btn) return;
 
   box.classList.toggle('signed-in', authState.authenticated);
@@ -895,12 +952,12 @@ function renderAuthState() {
       avatar.style.display = 'none';
     }
   } else {
-    if (authState.oauthConfigured) {
+    if (authState.selfAuthConfigured) {
+      name.textContent = 'AUTH';
+      btn.textContent = 'LOGIN';
+    } else if (authState.oauthConfigured) {
       name.textContent = 'GUEST';
       btn.textContent = 'LOGIN';
-    } else if (authState.selfAuthConfigured) {
-      name.textContent = 'LOCAL AUTH';
-      btn.textContent = 'LOCAL';
     } else {
       name.textContent = 'AUTH SETUP';
       btn.textContent = 'SETUP';
@@ -909,8 +966,8 @@ function renderAuthState() {
     avatar.style.display = 'none';
   }
 
-  if (devBtn) {
-    devBtn.style.display = authState.oauthConfigured ? '' : 'none';
+  if (registerBtn) {
+    registerBtn.style.display = (!authState.authenticated && authState.registrationEnabled) ? '' : 'none';
   }
 
   syncChatControls();
@@ -918,12 +975,12 @@ function renderAuthState() {
 
 async function handleAuthClick() {
   if (!authState.authenticated) {
-    if (window.GOOGLE_CLIENT_ID && authState.jwtLoginUrl) {
-      try { google.accounts.id.prompt(); } catch (e) { window.location.href = authState.loginUrl || AUTH_LOGIN; }
+    if (authState.selfAuthConfigured) {
+      await localLoginPrompt();
       return;
     }
-    if (authState.selfAuthConfigured) {
-      await devLoginPrompt();
+    if (window.GOOGLE_CLIENT_ID && authState.jwtLoginUrl) {
+      try { google.accounts.id.prompt(); } catch (e) { window.location.href = authState.loginUrl || AUTH_LOGIN; }
       return;
     }
     window.location.href = authState.loginUrl || AUTH_LOGIN;
@@ -931,31 +988,66 @@ async function handleAuthClick() {
   }
 
   try {
-    await fetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' });
+    await authFetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' }, false);
   } finally {
-    window.location.reload();
+    accessToken = null;
+    authState.authenticated = false;
+    authState.user = null;
+    renderAuthState();
+    showToast('Logged out');
   }
 }
 
-async function devLoginPrompt() {
-  const username = prompt('Dev username (leave blank to cancel):', 'dev');
-  if (!username) return;
-  const password = prompt('Dev password:','');
+async function localLoginPrompt() {
+  const login = prompt('Username or email:', 'admin');
+  if (!login) return;
+  const password = prompt('Password:', '');
+  if (password === null) return;
   try {
-    const res = await fetch('/auth/self-login', {
+    const res = await fetch(API_AUTH_LOGIN, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      credentials: 'same-origin',
+      body: JSON.stringify({ login, password }),
     });
     const data = await res.json();
     if (!res.ok) {
-      showToast(data.error || 'Dev login failed');
+      showToast(data.error || 'Login failed');
       return;
     }
-    // success: server sets session; reload to reflect auth state
-    window.location.reload();
+    applyAuthPayload(data);
+    renderAuthState();
+    showToast('Logged in');
   } catch (e) {
-    showToast('Dev login failed');
+    showToast('Login failed');
+  }
+}
+
+async function registerPrompt() {
+  if (!authState.registrationEnabled) return;
+  const username = prompt('New username:', '');
+  if (!username) return;
+  const email = prompt('Email (optional):', '') || '';
+  const password = prompt('Password, minimum 8 characters:', '');
+  if (password === null) return;
+
+  try {
+    const res = await fetch(API_AUTH_REGISTER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ username, email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Registration failed');
+      return;
+    }
+    applyAuthPayload(data);
+    renderAuthState();
+    showToast('Account created');
+  } catch (e) {
+    showToast('Registration failed');
   }
 }
 
@@ -1034,15 +1126,17 @@ async function send() {
     '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>', true);
 
   try {
-    const res = await fetch(API_CHAT, {
+    const res = await authFetch(API_CHAT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: txt }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
+      accessToken = null;
       authState.authenticated = false;
+      authState.user = null;
       renderAuthState();
     }
     if (!res.ok) throw new Error(data.error || 'Chat request failed');

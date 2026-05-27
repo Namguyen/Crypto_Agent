@@ -2,4 +2,7 @@
 .env
 
 # .gitignore
+__pycache__/
 crypto_history.json
+auth.db
+auth.db-*

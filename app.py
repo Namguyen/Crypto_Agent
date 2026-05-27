@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+import re
 import secrets
 from functools import wraps
 from urllib.parse import urlencode
@@ -11,9 +13,21 @@ try:
 except Exception:  # pragma: no cover - helpful error when dependency missing
     jwt = None
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, session, url_for
+from flask import Flask, g, render_template, request, jsonify, redirect, session, url_for
 from openai import OpenAI
 import dotenv
+from auth_store import (
+    cleanup_expired_refresh_tokens,
+    create_user,
+    get_refresh_token,
+    get_user_by_id,
+    init_auth_db,
+    public_user,
+    revoke_refresh_token,
+    store_refresh_token,
+    upsert_env_user,
+    verify_user_password,
+)
 from tools import TOOL_SCHEMA, TOOL_MAP
 
 dotenv.load_dotenv()
@@ -52,7 +66,11 @@ def oauth_is_configured() -> bool:
 
 
 def self_auth_is_configured() -> bool:
-    return bool(SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD)
+    return True
+
+
+def registration_is_enabled() -> bool:
+    return AUTH_ALLOW_REGISTRATION
 
 
 def verify_id_token(id_token: str) -> dict:
@@ -87,9 +105,27 @@ def verify_id_token(id_token: str) -> dict:
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or app.secret_key
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "3600"))
+JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "900"))
+ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET") or JWT_SECRET_KEY
+REFRESH_TOKEN_SECRET = (
+    os.getenv("REFRESH_TOKEN_SECRET")
+    or os.getenv("JWT_REFRESH_SECRET")
+    or f"{JWT_SECRET_KEY}:refresh"
+)
+ACCESS_TOKEN_EXP_SECONDS = int(os.getenv("ACCESS_TOKEN_EXP_SECONDS", str(JWT_EXP_SECONDS)))
+REFRESH_TOKEN_EXP_SECONDS = int(os.getenv("REFRESH_TOKEN_EXP_SECONDS", str(60 * 60 * 24 * 7)))
+AUTH_ALLOW_REGISTRATION = os.getenv("AUTH_ALLOW_REGISTRATION", "true").lower() in {"1", "true", "yes", "on"}
+AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/api/auth"
 SELF_AUTH_USERNAME = os.getenv("SELF_AUTH_USERNAME")
 SELF_AUTH_PASSWORD = os.getenv("SELF_AUTH_PASSWORD")
+SELF_AUTH_EMAIL = os.getenv("SELF_AUTH_EMAIL")
+
+init_auth_db()
+cleanup_expired_refresh_tokens()
+if SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD:
+    upsert_env_user(SELF_AUTH_USERNAME, SELF_AUTH_PASSWORD, SELF_AUTH_EMAIL)
 
 
 def create_self_signed_jwt(subject: str, name: str = None) -> str:
@@ -125,12 +161,197 @@ def oauth_redirect_uri() -> str:
     return os.getenv("GOOGLE_OAUTH_REDIRECT_URI") or url_for("oauth_callback", _external=True)
 
 
+def json_error(message: str, status: int):
+    return jsonify({"error": message}), status
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def encode_jwt(payload: dict, secret: str) -> str:
+    token = jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+    return token
+
+
+def sign_access_token(user: dict) -> str:
+    if jwt is None:
+        raise RuntimeError("pyjwt is not installed. Install with `pip install pyjwt`.")
+    now = int(time.time())
+    return encode_jwt(
+        {
+            "type": "access",
+            "sub": str(user["id"]),
+            "username": user.get("username") or user.get("name"),
+            "email": user.get("email", ""),
+            "iat": now,
+            "exp": now + ACCESS_TOKEN_EXP_SECONDS,
+        },
+        ACCESS_TOKEN_SECRET,
+    )
+
+
+def sign_refresh_token(user: dict, jti: str) -> str:
+    if jwt is None:
+        raise RuntimeError("pyjwt is not installed. Install with `pip install pyjwt`.")
+    now = int(time.time())
+    return encode_jwt(
+        {
+            "type": "refresh",
+            "sub": str(user["id"]),
+            "jti": jti,
+            "iat": now,
+            "exp": now + REFRESH_TOKEN_EXP_SECONDS,
+        },
+        REFRESH_TOKEN_SECRET,
+    )
+
+
+def decode_access_token(token: str) -> dict:
+    if jwt is None:
+        raise RuntimeError("pyjwt is not installed. Install with `pip install pyjwt`.")
+    payload = jwt.decode(token, ACCESS_TOKEN_SECRET, algorithms=[JWT_ALGORITHM])
+    if payload.get("type") != "access":
+        raise jwt.InvalidTokenError("Invalid token type")
+    user = get_user_by_id(payload.get("sub"))
+    if not user:
+        raise jwt.InvalidTokenError("User no longer exists")
+    return user
+
+
+def decode_refresh_token(token: str) -> dict:
+    if jwt is None:
+        raise RuntimeError("pyjwt is not installed. Install with `pip install pyjwt`.")
+    payload = jwt.decode(token, REFRESH_TOKEN_SECRET, algorithms=[JWT_ALGORITHM])
+    if payload.get("type") != "refresh" or not payload.get("jti"):
+        raise jwt.InvalidTokenError("Invalid refresh token")
+    return payload
+
+
+def set_refresh_cookie(response, refresh_token: str):
+    response.set_cookie(
+        REFRESH_COOKIE_NAME,
+        refresh_token,
+        max_age=REFRESH_TOKEN_EXP_SECONDS,
+        httponly=True,
+        secure=AUTH_COOKIE_SECURE,
+        samesite="Strict",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def clear_refresh_cookie(response):
+    response.delete_cookie(
+        REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        samesite="Strict",
+        secure=AUTH_COOKIE_SECURE,
+    )
+
+
+def request_ip() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.remote_addr or ""
+
+
+def create_refresh_token_record(user: dict) -> tuple[str, str]:
+    jti = secrets.token_hex(16)
+    refresh_token = sign_refresh_token(user, jti)
+    store_refresh_token(
+        user_id=user["id"],
+        token_hash=hash_token(refresh_token),
+        jti=jti,
+        expires_at=int(time.time()) + REFRESH_TOKEN_EXP_SECONDS,
+        ip=request_ip(),
+        user_agent=request.headers.get("User-Agent", ""),
+    )
+    return refresh_token, jti
+
+
+def issue_auth_response(user: dict, status_code: int = 200):
+    access_token = sign_access_token(user)
+    refresh_token, _ = create_refresh_token_record(user)
+    response = jsonify(
+        {
+            "ok": True,
+            "accessToken": access_token,
+            "expiresIn": ACCESS_TOKEN_EXP_SECONDS,
+            "user": user,
+        }
+    )
+    response.status_code = status_code
+    set_refresh_cookie(response, refresh_token)
+    return response
+
+
+def bearer_token() -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return ""
+    return auth_header.split(" ", 1)[1].strip()
+
+
+def user_from_legacy_bearer(token: str) -> dict | None:
+    payload = None
+    if jwt is not None:
+        try:
+            payload = verify_self_signed_jwt(token)
+        except Exception:
+            payload = None
+    if payload is None:
+        try:
+            payload = verify_id_token(token)
+        except Exception:
+            payload = None
+    if not payload or not payload.get("sub"):
+        return None
+    return {
+        "id": payload.get("sub"),
+        "name": payload.get("name") or payload.get("email") or payload.get("sub"),
+        "email": payload.get("email", ""),
+        "picture": payload.get("picture", ""),
+        "email_verified": bool(payload.get("email_verified")),
+        "provider": "legacy",
+    }
+
+
+def authenticate_request() -> tuple[dict | None, str | None]:
+    if hasattr(g, "current_user"):
+        return g.current_user, None
+
+    token = bearer_token()
+    if token:
+        try:
+            user = decode_access_token(token)
+            g.current_user = user
+            return user, None
+        except jwt.ExpiredSignatureError:
+            return None, "Access token expired"
+        except jwt.InvalidTokenError:
+            legacy_user = user_from_legacy_bearer(token)
+            if legacy_user:
+                g.current_user = legacy_user
+                return legacy_user, None
+            return None, "Invalid token"
+
+    session_user = session.get("user")
+    if session_user:
+        g.current_user = session_user
+        return session_user, None
+    return None, None
+
+
 def current_user():
-    return session.get("user")
+    user, _ = authenticate_request()
+    return user
 
 
 def conversation_key_for_user(user: dict) -> str:
-    return f"google:{user['id']}"
+    return f"{user.get('provider', 'local')}:{user['id']}"
 
 
 def get_conversation_history() -> list:
@@ -144,42 +365,12 @@ def get_conversation_history() -> list:
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not current_user():
-            # Allow Authorization: Bearer <self-signed-token> for stateless API access
-            auth_header = request.headers.get('Authorization', '')
-            if auth_header.startswith('Bearer '):
-                token = auth_header.split(' ', 1)[1].strip()
-                if token:
-                    # Try self-signed JWT first
-                    try:
-                        payload = None
-                        if jwt is not None:
-                            try:
-                                payload = verify_self_signed_jwt(token)
-                            except Exception:
-                                payload = None
-                        # If self-signed verify didn't work, try Google ID token verification
-                        if payload is None:
-                            try:
-                                payload = verify_id_token(token)
-                            except Exception:
-                                payload = None
-                        if payload and payload.get('sub'):
-                            # establish a temporary session user
-                            session['user'] = {
-                                'id': payload.get('sub'),
-                                'name': payload.get('name') or payload.get('email') or payload.get('sub'),
-                                'email': payload.get('email', ''),
-                                'picture': payload.get('picture', ''),
-                                'email_verified': bool(payload.get('email_verified')),
-                            }
-                            return view(*args, **kwargs)
-                    except Exception:
-                        pass
-
+        user, auth_error = authenticate_request()
+        if not user:
             return jsonify({
-                "error": "Login required",
+                "error": auth_error or "Login required",
                 "loginUrl": url_for("oauth_login"),
+                "refreshUrl": url_for("auth_refresh"),
             }), 401
         return view(*args, **kwargs)
     return wrapped
@@ -259,18 +450,140 @@ def price_data():
 
 @app.route('/api/auth/me')
 def auth_me():
-    user = current_user()
+    user, auth_error = authenticate_request()
     return jsonify({
         "authenticated": bool(user),
         "user": user,
+        "authError": auth_error,
         "oauthConfigured": oauth_is_configured(),
         "selfAuthConfigured": self_auth_is_configured(),
+        "registrationEnabled": registration_is_enabled(),
+        "accessTokenTtlSeconds": ACCESS_TOKEN_EXP_SECONDS,
         "loginUrl": url_for("oauth_login"),
+        "localLoginUrl": url_for("auth_login_api"),
+        "registerUrl": url_for("auth_register"),
+        "refreshUrl": url_for("auth_refresh"),
         "jwtLoginUrl": url_for("jwt_login"),
         "selfLoginUrl": url_for("self_login"),
         "selfVerifyUrl": url_for("self_verify"),
-        "logoutUrl": url_for("logout"),
+        "logoutUrl": url_for("auth_logout"),
     })
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def auth_register():
+    if not registration_is_enabled():
+        return json_error("Registration is disabled", 403)
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,64}", username):
+        return json_error("Username must be 3-64 letters, numbers, dots, dashes, or underscores", 400)
+    if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return json_error("Invalid email address", 400)
+    if len(password) < 8:
+        return json_error("Password must be at least 8 characters", 400)
+
+    try:
+        user = create_user(username, email, password)
+    except ValueError as exc:
+        return json_error(str(exc), 409)
+    return issue_auth_response(user, status_code=201)
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login_api():
+    data = request.get_json(silent=True) or {}
+    login = (data.get("login") or data.get("username") or data.get("email") or "").strip()
+    password = data.get("password") or ""
+    if not login or not password:
+        return json_error("Missing login or password", 400)
+
+    user = verify_user_password(login, password)
+    if not user:
+        return json_error("Invalid credentials", 401)
+    return issue_auth_response(user)
+
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def auth_refresh():
+    refresh_token = request.cookies.get(REFRESH_COOKIE_NAME, "")
+    if not refresh_token:
+        return json_error("Missing refresh token", 401)
+
+    token_hash = hash_token(refresh_token)
+    try:
+        payload = decode_refresh_token(refresh_token)
+    except jwt.ExpiredSignatureError:
+        revoke_refresh_token(token_hash)
+        response = jsonify({"error": "Refresh token expired"})
+        response.status_code = 401
+        clear_refresh_cookie(response)
+        return response
+    except jwt.InvalidTokenError:
+        response = jsonify({"error": "Invalid refresh token"})
+        response.status_code = 401
+        clear_refresh_cookie(response)
+        return response
+
+    record = get_refresh_token(token_hash, payload["jti"])
+    if not record:
+        response = jsonify({"error": "Refresh token not recognized"})
+        response.status_code = 401
+        clear_refresh_cookie(response)
+        return response
+    if record["revoked_at"]:
+        response = jsonify({"error": "Refresh token revoked"})
+        response.status_code = 401
+        clear_refresh_cookie(response)
+        return response
+    if int(record["expires_at"]) < int(time.time()):
+        revoke_refresh_token(token_hash)
+        response = jsonify({"error": "Refresh token expired"})
+        response.status_code = 401
+        clear_refresh_cookie(response)
+        return response
+
+    user = {
+        "id": str(record["user_id"]),
+        "username": record["username"],
+        "email": record["email"] or "",
+        "name": record["username"],
+        "picture": "",
+        "email_verified": bool(record["email"]),
+        "provider": "local",
+    }
+    access_token = sign_access_token(user)
+    new_refresh_token, new_jti = create_refresh_token_record(user)
+    revoke_refresh_token(token_hash, replaced_by=new_jti)
+
+    response = jsonify({
+        "ok": True,
+        "accessToken": access_token,
+        "expiresIn": ACCESS_TOKEN_EXP_SECONDS,
+        "user": user,
+    })
+    set_refresh_cookie(response, new_refresh_token)
+    return response
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+@app.route('/auth/logout', methods=['POST'])
+def auth_logout():
+    user = current_user()
+    refresh_token = request.cookies.get(REFRESH_COOKIE_NAME, "")
+    if refresh_token:
+        revoke_refresh_token(hash_token(refresh_token))
+    if user:
+        conversation_histories.pop(conversation_key_for_user(user), None)
+    session.clear()
+
+    response = jsonify({"ok": True})
+    clear_refresh_cookie(response)
+    return response
 
 
 @app.route('/auth/login')
@@ -392,39 +705,20 @@ def jwt_login():
 
 @app.route('/auth/self-login', methods=['POST'])
 def self_login():
-    """Issue a self-signed JWT for a local user and set session.
-
-    Behavior:
-    - If `SELF_AUTH_USERNAME` and `SELF_AUTH_PASSWORD` are set in env, the request
-      must match those credentials.
-    - Otherwise any `username` is accepted (convenience for local dev).
-    Request JSON: {"username": "...", "password": "..."}
-    Returns: {"token": "..."}
-    """
+    """Backward-compatible local login endpoint."""
     if jwt is None:
         return jsonify({"error": "pyjwt library not installed"}), 500
 
     data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
+    username = (data.get('username') or data.get('login') or '').strip()
     password = data.get('password') or ''
     if not username:
         return jsonify({"error": "Missing username"}), 400
 
-    if SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD:
-        if username != SELF_AUTH_USERNAME or password != SELF_AUTH_PASSWORD:
-            return jsonify({"error": "Invalid credentials"}), 401
-    # else: permissive for local dev
-
-    token = create_self_signed_jwt(username, name=username)
-    # Also populate session for existing session-based flows
-    session['user'] = {
-        'id': username,
-        'name': username,
-        'email': '',
-        'picture': '',
-        'email_verified': False,
-    }
-    return jsonify({"token": token})
+    user = verify_user_password(username, password)
+    if not user:
+        return jsonify({"error": "Invalid credentials"}), 401
+    return issue_auth_response(user)
 
 
 @app.route('/auth/self-verify', methods=['POST'])
@@ -459,16 +753,6 @@ def self_verify():
         'email_verified': bool(payload.get('email_verified')),
     }
     return jsonify({"ok": True})
-
-
-@app.route('/auth/logout', methods=['POST'])
-def logout():
-    user = current_user()
-    if user:
-        conversation_histories.pop(conversation_key_for_user(user), None)
-    session.clear()
-    return jsonify({"ok": True})
-
 
 @app.route('/')
 def index():
