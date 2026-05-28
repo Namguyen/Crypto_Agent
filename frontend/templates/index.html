@@ -192,37 +192,6 @@
       letter-spacing: .04em; transition: all .15s; white-space: nowrap;
     }
     .qbtn:hover { border-color: rgba(239,159,39,.4); color: #EF9F27; }
-    .mode-switch {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      margin-left: auto;
-      padding: 2px;
-      background: #090b0e;
-      border: 1px solid #1e2330;
-      border-radius: 6px;
-    }
-    .mode-btn {
-      min-width: 72px;
-      height: 24px;
-      border: none;
-      border-radius: 4px;
-      background: transparent;
-      color: #4a5268;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 10px;
-      letter-spacing: .04em;
-    }
-    .mode-btn.active {
-      background: #ef9f27;
-      color: #0b0d11;
-      font-weight: 700;
-    }
-    .mode-btn:disabled {
-      cursor: not-allowed;
-      opacity: .45;
-    }
 
     /* Messages */
     .msgs {
@@ -295,6 +264,37 @@
     .input-row {
       display: flex; align-items: center; gap: 10px;
       padding: 12px 14px; border-top: 1px solid #1a1e28; flex-shrink: 0;
+    }
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      background: #090b0e;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .mode-btn {
+      min-width: 72px;
+      height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: #4a5268;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: .04em;
+    }
+    .mode-btn.active {
+      background: #ef9f27;
+      color: #0b0d11;
+      font-weight: 700;
+    }
+    .mode-btn:disabled {
+      cursor: not-allowed;
+      opacity: .45;
     }
     .inp-wrap {
       flex: 1; display: flex; align-items: center;
@@ -549,10 +549,6 @@
         <button class="qbtn" onclick="qs('ETH vs SOL — which is stronger right now?')">ETH vs SOL</button>
         <button class="qbtn" onclick="qs('Top gainers and losers today')">top movers</button>
         <button class="qbtn" onclick="qs('DeFi sector overview')">DeFi</button>
-        <div class="mode-switch" role="group" aria-label="Chat mode">
-          <button class="mode-btn" id="modeInstant" type="button" title="Fast low-cost answers" onclick="setChatMode('instant')">Instant</button>
-          <button class="mode-btn" id="modeReasoning" type="button" title="Deeper analysis for harder questions" onclick="setChatMode('reasoning')">Reasoning</button>
-        </div>
       </div>
 
       <!-- Messages -->
@@ -569,6 +565,10 @@
 
       <!-- Input -->
       <div class="input-row">
+        <div class="mode-switch" role="group" aria-label="Chat mode">
+          <button class="mode-btn" id="modeInstant" type="button" title="Fast low-cost answers" onclick="setChatMode('instant')">Instant</button>
+          <button class="mode-btn" id="modeReasoning" type="button" title="Deeper analysis for harder questions" onclick="setChatMode('reasoning')">Reasoning</button>
+        </div>
         <div class="inp-wrap">
           <input class="inp" id="inp" type="text"
             placeholder="Ask a question, look up prices, market news..." autocomplete="off" />
@@ -665,7 +665,6 @@ function setChatMode(mode) {
   chatMode = mode;
   localStorage.setItem('cryptoAgentChatMode', chatMode);
   renderChatMode();
-  showToast(`${mode} mode`);
 }
 
 function renderChatMode() {
