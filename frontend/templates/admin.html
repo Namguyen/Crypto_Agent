@@ -188,11 +188,12 @@
       }
       root.innerHTML = `
         <table>
-          <thead><tr><th>Time</th><th>User</th><th>Status</th><th>Message</th><th>Reply/Error</th><th>MS</th></tr></thead>
+          <thead><tr><th>Time</th><th>User</th><th>Mode</th><th>Status</th><th>Message</th><th>Reply/Error</th><th>MS</th></tr></thead>
           <tbody>${logs.map(l => `
             <tr>
               <td>${fmtTime(l.createdAt)}</td>
               <td>${esc(l.username)}</td>
+              <td title="${esc(l.model || '')}">${esc(l.mode || 'instant')}</td>
               <td class="${l.status === 'ok' ? 'status-ok' : 'status-error'}">${esc(l.status)}</td>
               <td class="truncate" title="${esc(l.message)}">${esc(l.message)}</td>
               <td class="truncate" title="${esc(l.error || l.reply)}">${esc(l.error || l.reply)}</td>

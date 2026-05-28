@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -151,6 +152,39 @@ class AuthFlowTest(unittest.TestCase):
             logs = client.get("/api/admin/request-logs", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(logs.status_code, 200)
             self.assertIn("logs", logs.json())
+
+    def test_chat_modes_and_request_logging(self):
+        with TestClient(self.app) as client, patch("backend.app.run_agent", return_value="reasoned reply") as run_agent:
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+
+            modes = client.get("/api/chat/modes")
+            self.assertEqual(modes.status_code, 200)
+            self.assertEqual(modes.json()["defaultMode"], "instant")
+            self.assertEqual({mode["key"] for mode in modes.json()["modes"]}, {"instant", "reasoning"})
+
+            invalid = client.post(
+                "/api/chat",
+                json={"message": "Compare BTC and ETH", "mode": "slow"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(invalid.status_code, 400)
+            self.assertEqual(invalid.json()["error"], "Invalid chat mode")
+
+            res = client.post(
+                "/api/chat",
+                json={"message": "Compare BTC and ETH", "mode": "reasoning"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json()["mode"], "reasoning")
+            self.assertEqual(res.json()["reply"], "reasoned reply")
+            self.assertEqual(run_agent.call_args.kwargs["mode"], "reasoning")
+
+            logs = client.get("/api/admin/request-logs", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(logs.status_code, 200)
+            self.assertEqual(logs.json()["logs"][0]["mode"], "reasoning")
+            self.assertTrue(logs.json()["logs"][0]["model"])
 
     def test_missing_auth_blocks_chat(self):
         with TestClient(self.app) as client:

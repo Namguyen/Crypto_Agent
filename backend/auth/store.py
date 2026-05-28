@@ -81,6 +81,8 @@ def init_auth_db() -> None:
                 reply TEXT,
                 status TEXT NOT NULL,
                 error TEXT,
+                mode TEXT NOT NULL DEFAULT 'instant',
+                model TEXT,
                 duration_ms INTEGER,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -90,6 +92,14 @@ def init_auth_db() -> None:
                 ON user_requests(user_id, created_at DESC);
             """
         )
+        ensure_column(conn, "user_requests", "mode", "TEXT NOT NULL DEFAULT 'instant'")
+        ensure_column(conn, "user_requests", "model", "TEXT")
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def normalize_email(email: Optional[str]) -> Optional[str]:
@@ -307,16 +317,18 @@ def log_user_request(
     status: str,
     error: Optional[str],
     duration_ms: Optional[int],
+    mode: str = "instant",
+    model: Optional[str] = None,
 ) -> None:
     now = int(time.time())
     with auth_connection() as conn:
         conn.execute(
             """
             INSERT INTO user_requests
-                (user_id, message, reply, status, error, duration_ms, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, message, reply, status, error, duration_ms, mode, model, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (str(user_id), message, reply, status, error, duration_ms, now),
+            (str(user_id), message, reply, status, error, duration_ms, mode, model, now),
         )
 
 
@@ -366,6 +378,8 @@ def list_admin_request_logs(limit: int = 100) -> list[dict]:
                 ur.reply,
                 ur.status,
                 ur.error,
+                ur.mode,
+                ur.model,
                 ur.duration_ms,
                 ur.created_at
             FROM user_requests ur
@@ -384,6 +398,8 @@ def list_admin_request_logs(limit: int = 100) -> list[dict]:
             "reply": row["reply"] or "",
             "status": row["status"],
             "error": row["error"] or "",
+            "mode": row["mode"] or "instant",
+            "model": row["model"] or "",
             "durationMs": row["duration_ms"],
             "createdAt": int(row["created_at"]),
         }

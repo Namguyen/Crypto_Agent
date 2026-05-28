@@ -17,7 +17,7 @@ try:
 except Exception:  # pragma: no cover - helpful error when dependency missing
     jwt = None
 
-from backend.ai.agent import run_agent
+from backend.ai.agent import CHAT_MODES, chat_mode_options, normalize_chat_mode, run_agent
 from backend.auth.store import (
     cleanup_expired_refresh_tokens,
     create_note,
@@ -506,23 +506,33 @@ def admin_request_logs(limit: int = 100, user=Depends(require_user)):
     return {"logs": list_admin_request_logs(limit)}
 
 
+@app.get("/api/chat/modes")
+def chat_modes():
+    return {"defaultMode": "instant", "modes": chat_mode_options()}
+
+
 @app.post("/api/chat")
 async def chat(request: Request, user=Depends(require_user)):
     if isinstance(user, JSONResponse):
         return user
     data = await request.json()
     user_input = data.get("message", "").strip()
+    raw_mode = (data.get("mode") or "instant").strip().lower()
 
+    if raw_mode not in CHAT_MODES:
+        return json_error("Invalid chat mode", 400)
     if not user_input:
         return json_error("Empty message", 400)
 
+    mode = normalize_chat_mode(raw_mode)
+    mode_config = CHAT_MODES[mode]
     started_at = time.perf_counter()
     try:
-        reply = run_agent(user_input, get_conversation_history(user))
+        reply = run_agent(user_input, get_conversation_history(user), mode=mode)
         duration_ms = int((time.perf_counter() - started_at) * 1000)
-        log_user_request(user["id"], user_input, reply, "ok", None, duration_ms)
-        return {"reply": reply}
+        log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
+        return {"reply": reply, "mode": mode, "model": mode_config.model}
     except Exception as exc:
         duration_ms = int((time.perf_counter() - started_at) * 1000)
-        log_user_request(user["id"], user_input, None, "error", str(exc), duration_ms)
+        log_user_request(user["id"], user_input, None, "error", str(exc), duration_ms, mode, mode_config.model)
         return json_error(str(exc), 500)

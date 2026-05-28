@@ -192,6 +192,37 @@
       letter-spacing: .04em; transition: all .15s; white-space: nowrap;
     }
     .qbtn:hover { border-color: rgba(239,159,39,.4); color: #EF9F27; }
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: auto;
+      padding: 2px;
+      background: #090b0e;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+    }
+    .mode-btn {
+      min-width: 72px;
+      height: 24px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: #4a5268;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: .04em;
+    }
+    .mode-btn.active {
+      background: #ef9f27;
+      color: #0b0d11;
+      font-weight: 700;
+    }
+    .mode-btn:disabled {
+      cursor: not-allowed;
+      opacity: .45;
+    }
 
     /* Messages */
     .msgs {
@@ -518,6 +549,10 @@
         <button class="qbtn" onclick="qs('ETH vs SOL — which is stronger right now?')">ETH vs SOL</button>
         <button class="qbtn" onclick="qs('Top gainers and losers today')">top movers</button>
         <button class="qbtn" onclick="qs('DeFi sector overview')">DeFi</button>
+        <div class="mode-switch" role="group" aria-label="Chat mode">
+          <button class="mode-btn" id="modeInstant" type="button" title="Fast low-cost answers" onclick="setChatMode('instant')">Instant</button>
+          <button class="mode-btn" id="modeReasoning" type="button" title="Deeper analysis for harder questions" onclick="setChatMode('reasoning')">Reasoning</button>
+        </div>
       </div>
 
       <!-- Messages -->
@@ -613,6 +648,7 @@ const COINGECKO_MAP = {
 let P = {};
 let hist = [];
 let busy = false;
+let chatMode = localStorage.getItem('cryptoAgentChatMode') || 'instant';
 let authState = {
   authenticated: false,
   user: null,
@@ -623,6 +659,26 @@ let authState = {
 };
 let accessToken = null;
 let notes = []; // Persisted locally
+
+function setChatMode(mode) {
+  if (!['instant', 'reasoning'].includes(mode)) return;
+  chatMode = mode;
+  localStorage.setItem('cryptoAgentChatMode', chatMode);
+  renderChatMode();
+  showToast(`${mode} mode`);
+}
+
+function renderChatMode() {
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.disabled = busy;
+  });
+
+  const active = chatMode === 'reasoning'
+    ? document.getElementById('modeReasoning')
+    : document.getElementById('modeInstant');
+  if (active) active.classList.add('active');
+}
 
 // ── CoinGecko — fetch prices + 24h % change ──
 async function fetchPrices() {
@@ -989,6 +1045,7 @@ function syncChatControls() {
 
   inp.disabled = !authState.authenticated;
   sbtn.disabled = busy || !authState.authenticated;
+  renderChatMode();
 
   if (authState.authenticated) {
     inp.placeholder = CHAT_PLACEHOLDER;
@@ -1137,7 +1194,7 @@ async function send() {
     const res = await authFetch(API_CHAT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: txt }),
+      body: JSON.stringify({ message: txt, mode: chatMode }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -1187,6 +1244,7 @@ function tick() {
 
 // ── Init ─────────────────────────────────────
 async function init() {
+  renderChatMode();
   await loadAuthState();
   await fetchPrices();
   setInterval(fetchPrices, 30000);
