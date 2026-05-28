@@ -86,6 +86,26 @@ def chat_mode_options() -> list[dict]:
     ]
 
 
+def final_answer_without_tools(conversation: list, config: ChatModeConfig) -> str:
+    response = client.chat.completions.create(
+        model=config.model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
+                    "Do not call tools in this response. Use the conversation and any tool results already available. "
+                    "If live data is missing, say that briefly and give a useful answer from available context."
+                ),
+            }
+        ]
+        + conversation,
+        max_tokens=config.max_tokens,
+        stream=False,
+    )
+    return response.choices[0].message.content or "No response."
+
+
 def run_agent(user_input: str, conversation: list, mode: str = "instant") -> str:
     """Execute the crypto assistant with mode-specific model and tool settings."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
@@ -112,7 +132,7 @@ def run_agent(user_input: str, conversation: list, mode: str = "instant") -> str
 
         if msg.tool_calls:
             if tool_rounds >= config.max_tool_rounds:
-                final = "I reached the tool-call limit for this mode. Please narrow the question and try again."
+                final = final_answer_without_tools(conversation, config)
                 conversation.append({"role": "assistant", "content": final})
                 return final
 
