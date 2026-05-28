@@ -93,6 +93,134 @@
       border-color: rgba(239,159,39,.5);
       background: rgba(239,159,39,.08);
     }
+    .notif-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .notif-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      background: #0f1219;
+      color: #ef9f27;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1;
+      position: relative;
+    }
+    .notif-btn:hover {
+      border-color: rgba(239,159,39,.55);
+    }
+    .notif-count {
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #a04050;
+      color: #fff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .notif-count.visible { display: flex; }
+    .notif-panel {
+      position: absolute;
+      top: 38px;
+      right: 0;
+      width: 330px;
+      max-height: 420px;
+      display: none;
+      flex-direction: column;
+      background: #0b0d11;
+      border: 1px solid #1e2330;
+      border-radius: 8px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.45);
+      z-index: 30;
+      overflow: hidden;
+    }
+    .notif-panel.open { display: flex; }
+    .notif-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #1a1e28;
+    }
+    .notif-title {
+      color: #ef9f27;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+    }
+    .notif-action {
+      background: none;
+      border: none;
+      color: #6b7488;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 9px;
+    }
+    .notif-action:hover { color: #ef9f27; }
+    .notif-list {
+      overflow-y: auto;
+      max-height: 270px;
+    }
+    .notif-item {
+      padding: 10px 12px;
+      border-bottom: 1px solid #141822;
+      background: #0b0d11;
+    }
+    .notif-item.unread {
+      background: #10141d;
+    }
+    .notif-item-title {
+      color: #c8cdd8;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .notif-item-msg {
+      color: #8c95aa;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .notif-item-time {
+      color: #3a4252;
+      font-size: 9px;
+      margin-top: 5px;
+    }
+    .notif-empty {
+      color: #6b7488;
+      padding: 18px 12px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .notif-settings {
+      border-top: 1px solid #1a1e28;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .notif-setting {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #8c95aa;
+      font-size: 10px;
+    }
+    .notif-setting input {
+      accent-color: #ef9f27;
+    }
     
     /* Notebook toggle button */
     .toggle-nb-btn {
@@ -518,6 +646,20 @@
         <button class="auth-btn" id="authBtn" onclick="handleAuthClick()">LOGIN</button>
         <button class="auth-btn" id="registerBtn" style="background:#10202a;border-color:#123;" onclick="registerPrompt()">REGISTER</button>
       </div>
+      <div class="notif-wrap">
+        <button class="notif-btn" id="notifBtn" type="button" title="Price notifications" onclick="toggleNotifications()">!</button>
+        <span class="notif-count" id="notifCount">0</span>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-head">
+            <span class="notif-title">PRICE ALERTS</span>
+            <button class="notif-action" type="button" onclick="markNotificationsRead()">MARK READ</button>
+          </div>
+          <div class="notif-list" id="notifList">
+            <div class="notif-empty">Login to view price alerts.</div>
+          </div>
+          <div class="notif-settings" id="notifSettings"></div>
+        </div>
+      </div>
       <!-- Status Indicator -->
       <span class="db-status">LOCAL SYSTEM ACTIVE</span>
       
@@ -629,6 +771,9 @@ const API_AUTH_LOGIN = '/api/auth/login';
 const API_AUTH_REGISTER = '/api/auth/register';
 const API_AUTH_REFRESH = '/api/auth/refresh';
 const API_NOTES = '/api/notes';
+const API_NOTIFICATIONS = '/api/notifications';
+const API_NOTIFICATIONS_CHECK = '/api/notifications/check';
+const API_NOTIFICATIONS_READ = '/api/notifications/read';
 const AUTH_LOGIN = '/login';
 const AUTH_REGISTER = '/register';
 const AUTH_LOGOUT = '/api/auth/logout';
@@ -649,6 +794,8 @@ let P = {};
 let hist = [];
 let busy = false;
 let chatMode = localStorage.getItem('cryptoAgentChatMode') || 'instant';
+let notificationState = { events: [], settings: [], unreadCount: 0 };
+let notificationPoll = null;
 let authState = {
   authenticated: false,
   user: null,
@@ -677,6 +824,122 @@ function renderChatMode() {
     ? document.getElementById('modeReasoning')
     : document.getElementById('modeInstant');
   if (active) active.classList.add('active');
+}
+
+function fmtNotificationTime(epoch) {
+  if (!epoch) return '';
+  return new Date(epoch * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderNotifications() {
+  const count = document.getElementById('notifCount');
+  const list = document.getElementById('notifList');
+  const settings = document.getElementById('notifSettings');
+  if (!count || !list || !settings) return;
+
+  const unread = notificationState.unreadCount || 0;
+  count.textContent = unread > 9 ? '9+' : String(unread);
+  count.classList.toggle('visible', unread > 0);
+
+  if (!authState.authenticated) {
+    list.innerHTML = '<div class="notif-empty">Login to view price alerts.</div>';
+    settings.innerHTML = '';
+    return;
+  }
+
+  const events = notificationState.events || [];
+  if (!events.length) {
+    list.innerHTML = '<div class="notif-empty">No price alerts yet. Alerts are checked while this app is open.</div>';
+  } else {
+    list.innerHTML = events.map(event => `
+      <div class="notif-item ${event.readAt ? '' : 'unread'}">
+        <div class="notif-item-title">${escape(event.title)}</div>
+        <div class="notif-item-msg">${escape(event.message)}</div>
+        <div class="notif-item-time">${fmtNotificationTime(event.createdAt)}</div>
+      </div>
+    `).join('');
+  }
+
+  settings.innerHTML = (notificationState.settings || []).map(setting => `
+    <label class="notif-setting">
+      <span>${escape(setting.symbol)} +/- ${Number(setting.thresholdPercent).toFixed(1)}% in 24h</span>
+      <input type="checkbox" ${setting.enabled ? 'checked' : ''} onchange="updateNotificationSetting('${setting.id}', this.checked)" />
+    </label>
+  `).join('');
+}
+
+function applyNotificationPayload(data) {
+  notificationState = {
+    events: data.events || [],
+    settings: data.settings || [],
+    unreadCount: data.unreadCount || 0,
+  };
+  renderNotifications();
+}
+
+async function loadNotifications(check = false) {
+  if (!authState.authenticated) {
+    notificationState = { events: [], settings: [], unreadCount: 0 };
+    renderNotifications();
+    return;
+  }
+
+  try {
+    const res = await authFetch(check ? API_NOTIFICATIONS_CHECK : API_NOTIFICATIONS, {
+      method: check ? 'POST' : 'GET',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not load notifications');
+    applyNotificationPayload(data);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function startNotificationPolling() {
+  if (notificationPoll) clearInterval(notificationPoll);
+  if (!authState.authenticated) return;
+  loadNotifications(true);
+  notificationPoll = setInterval(() => loadNotifications(true), 120000);
+}
+
+function stopNotificationPolling() {
+  if (notificationPoll) clearInterval(notificationPoll);
+  notificationPoll = null;
+}
+
+function toggleNotifications() {
+  const panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && authState.authenticated) loadNotifications(false);
+}
+
+async function markNotificationsRead() {
+  if (!authState.authenticated) return;
+  try {
+    const res = await authFetch(API_NOTIFICATIONS_READ, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not mark notifications read');
+    applyNotificationPayload(data);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function updateNotificationSetting(id, enabled) {
+  try {
+    const res = await authFetch(`${API_NOTIFICATIONS}/settings/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not update notification setting');
+    applyNotificationPayload(data);
+  } catch (e) {
+    showToast(e.message || 'Could not update notification setting');
+  }
 }
 
 // ── CoinGecko — fetch prices + 24h % change ──
@@ -1097,12 +1360,15 @@ async function handleAuthClick() {
   try {
     await authFetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' }, false);
   } finally {
+    stopNotificationPolling();
     accessToken = null;
     authState.authenticated = false;
     authState.user = null;
     notes = [];
+    notificationState = { events: [], settings: [], unreadCount: 0 };
     renderAuthState();
     renderNotes();
+    renderNotifications();
     showToast('Logged out');
   }
 }
@@ -1250,6 +1516,7 @@ async function init() {
   tick();
   setInterval(tick, 1000);
   await loadNotes();
+  startNotificationPolling();
 }
 
 init();

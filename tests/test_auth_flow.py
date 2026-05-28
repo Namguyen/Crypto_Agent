@@ -186,6 +186,34 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(logs.json()["logs"][0]["mode"], "reasoning")
             self.assertTrue(logs.json()["logs"][0]["model"])
 
+    def test_in_app_price_notifications(self):
+        market_payload = {
+            "bitcoin": {"usd": 73000, "usd_24h_change": -4.2},
+            "ethereum": {"usd": 2100, "usd_24h_change": 1.1},
+            "solana": {"usd": 160, "usd_24h_change": 0.5},
+            "ripple": {"usd": 1.25, "usd_24h_change": 0.2},
+            "binancecoin": {"usd": 620, "usd_24h_change": 0.8},
+        }
+
+        with TestClient(self.app) as client, patch("backend.app.fetch_market_prices", return_value=market_payload):
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+            headers = {"Authorization": f"Bearer {token}"}
+
+            initial = client.get("/api/notifications", headers=headers)
+            self.assertEqual(initial.status_code, 200)
+            self.assertGreaterEqual(len(initial.json()["settings"]), 5)
+
+            checked = client.post("/api/notifications/check", headers=headers)
+            self.assertEqual(checked.status_code, 200)
+            self.assertEqual(len(checked.json()["created"]), 1)
+            self.assertEqual(checked.json()["created"][0]["symbol"], "BTC")
+            self.assertEqual(checked.json()["unreadCount"], 1)
+
+            read = client.post("/api/notifications/read", headers=headers)
+            self.assertEqual(read.status_code, 200)
+            self.assertEqual(read.json()["unreadCount"], 0)
+
     def test_missing_auth_blocks_chat(self):
         with TestClient(self.app) as client:
             res = client.post("/api/chat", json={})

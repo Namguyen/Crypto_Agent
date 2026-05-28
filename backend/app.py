@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import dotenv
+import requests
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -27,12 +28,19 @@ from backend.auth.store import (
     get_refresh_token,
     get_user_by_id,
     init_auth_db,
+    active_notification_settings,
+    create_notification_event,
+    list_notification_events,
+    list_notification_settings,
     list_admin_request_logs,
     list_admin_users,
     list_notes,
     log_user_request,
+    mark_notifications_read,
     revoke_refresh_token,
     store_refresh_token,
+    unread_notification_count,
+    update_notification_setting,
     upsert_env_user,
     verify_user_password,
 )
@@ -275,6 +283,78 @@ def price_sidebar_data() -> list[dict]:
     return list(latest.values())
 
 
+def fetch_market_prices(coin_ids: list[str]) -> dict:
+    if not coin_ids:
+        return {}
+    response = requests.get(
+        "https://api.coingecko.com/api/v3/simple/price",
+        params={
+            "ids": ",".join(coin_ids),
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+        },
+        timeout=8,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def notification_payload(user_id: int | str, created: Optional[list[dict]] = None) -> dict:
+    return {
+        "created": created or [],
+        "events": list_notification_events(user_id),
+        "unreadCount": unread_notification_count(user_id),
+        "settings": list_notification_settings(user_id),
+    }
+
+
+def check_price_notifications_for_user(user: dict) -> list[dict]:
+    settings = active_notification_settings(user["id"])
+    price_data = fetch_market_prices([setting["coin_id"] for setting in settings])
+    now = int(time.time())
+    created = []
+
+    for setting in settings:
+        coin = price_data.get(setting["coin_id"])
+        if not coin:
+            continue
+
+        price = coin.get("usd")
+        change = coin.get("usd_24h_change")
+        if price is None or change is None:
+            continue
+
+        threshold = float(setting["threshold_percent"])
+        if abs(float(change)) < threshold:
+            continue
+
+        last_notified_at = setting["last_notified_at"]
+        cooldown_seconds = int(setting["cooldown_minutes"]) * 60
+        if last_notified_at and now - int(last_notified_at) < cooldown_seconds:
+            continue
+
+        direction = "rose" if change > 0 else "dropped"
+        title = f"{setting['symbol']} Price Alert"
+        message = (
+            f"{setting['symbol']} {direction} {abs(float(change)):.2f}% in 24h. "
+            f"Current price: ${float(price):,.2f}."
+        )
+        created.append(
+            create_notification_event(
+                user_id=user["id"],
+                setting_id=setting["id"],
+                coin_id=setting["coin_id"],
+                symbol=setting["symbol"],
+                title=title,
+                message=message,
+                price_usd=float(price),
+                change_percent=float(change),
+            )
+        )
+
+    return created
+
+
 @app.get("/api/price-data")
 def price_data():
     return {"prices": price_sidebar_data()}
@@ -504,6 +584,49 @@ def admin_request_logs(limit: int = 100, user=Depends(require_user)):
     if isinstance(user, JSONResponse):
         return user
     return {"logs": list_admin_request_logs(limit)}
+
+
+@app.get("/api/notifications")
+def notifications_list(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return notification_payload(user["id"])
+
+
+@app.post("/api/notifications/check")
+def notifications_check(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    try:
+        created = check_price_notifications_for_user(user)
+    except requests.RequestException as exc:
+        return json_error(f"Could not check market notifications: {exc}", 502)
+    return notification_payload(user["id"], created=created)
+
+
+@app.post("/api/notifications/read")
+def notifications_read(user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    mark_notifications_read(user["id"])
+    return notification_payload(user["id"])
+
+
+@app.patch("/api/notifications/settings/{setting_id}")
+async def notifications_setting_update(setting_id: str, request: Request, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    data = await request.json()
+    setting = update_notification_setting(
+        user_id=user["id"],
+        setting_id=setting_id,
+        enabled=data.get("enabled") if "enabled" in data else None,
+        threshold_percent=data.get("thresholdPercent") if "thresholdPercent" in data else None,
+        cooldown_minutes=data.get("cooldownMinutes") if "cooldownMinutes" in data else None,
+    )
+    if not setting:
+        return json_error("Notification setting not found or no changes provided", 404)
+    return notification_payload(user["id"])
 
 
 @app.get("/api/chat/modes")

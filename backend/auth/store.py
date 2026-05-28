@@ -90,6 +90,40 @@ def init_auth_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_user_requests_user_id_created_at
                 ON user_requests(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS notification_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                coin_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                threshold_percent REAL NOT NULL DEFAULT 3.0,
+                cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                last_notified_at INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(user_id, coin_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS notification_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                setting_id INTEGER,
+                coin_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                price_usd REAL,
+                change_percent REAL,
+                created_at INTEGER NOT NULL,
+                read_at INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(setting_id) REFERENCES notification_settings(id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notification_events_user_created_at
+                ON notification_events(user_id, created_at DESC);
             """
         )
         ensure_column(conn, "user_requests", "mode", "TEXT NOT NULL DEFAULT 'instant'")
@@ -405,3 +439,208 @@ def list_admin_request_logs(limit: int = 100) -> list[dict]:
         }
         for row in rows
     ]
+
+
+DEFAULT_NOTIFICATION_COINS = [
+    ("bitcoin", "BTC"),
+    ("ethereum", "ETH"),
+    ("solana", "SOL"),
+    ("ripple", "XRP"),
+    ("binancecoin", "BNB"),
+]
+
+
+def ensure_default_notification_settings(user_id: int | str) -> None:
+    now = int(time.time())
+    with auth_connection() as conn:
+        for coin_id, symbol in DEFAULT_NOTIFICATION_COINS:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO notification_settings
+                    (user_id, coin_id, symbol, threshold_percent, cooldown_minutes, enabled, created_at, updated_at)
+                VALUES (?, ?, ?, 3.0, 60, 1, ?, ?)
+                """,
+                (str(user_id), coin_id, symbol, now, now),
+            )
+
+
+def list_notification_settings(user_id: int | str) -> list[dict]:
+    ensure_default_notification_settings(user_id)
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM notification_settings
+            WHERE user_id = ?
+            ORDER BY symbol
+            """,
+            (str(user_id),),
+        ).fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "coinId": row["coin_id"],
+            "symbol": row["symbol"],
+            "thresholdPercent": float(row["threshold_percent"]),
+            "cooldownMinutes": int(row["cooldown_minutes"]),
+            "enabled": bool(row["enabled"]),
+            "lastNotifiedAt": row["last_notified_at"],
+        }
+        for row in rows
+    ]
+
+
+def update_notification_setting(
+    user_id: int | str,
+    setting_id: int | str,
+    enabled: Optional[bool] = None,
+    threshold_percent: Optional[float] = None,
+    cooldown_minutes: Optional[int] = None,
+) -> Optional[dict]:
+    fields = []
+    values = []
+    if enabled is not None:
+        fields.append("enabled = ?")
+        values.append(1 if enabled else 0)
+    if threshold_percent is not None:
+        fields.append("threshold_percent = ?")
+        values.append(max(0.5, min(float(threshold_percent), 50.0)))
+    if cooldown_minutes is not None:
+        fields.append("cooldown_minutes = ?")
+        values.append(max(5, min(int(cooldown_minutes), 1440)))
+    if not fields:
+        return None
+
+    fields.append("updated_at = ?")
+    values.append(int(time.time()))
+    values.extend([str(setting_id), str(user_id)])
+    with auth_connection() as conn:
+        conn.execute(
+            f"""
+            UPDATE notification_settings
+            SET {", ".join(fields)}
+            WHERE id = ? AND user_id = ?
+            """,
+            tuple(values),
+        )
+        row = conn.execute(
+            "SELECT * FROM notification_settings WHERE id = ? AND user_id = ?",
+            (str(setting_id), str(user_id)),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": str(row["id"]),
+        "coinId": row["coin_id"],
+        "symbol": row["symbol"],
+        "thresholdPercent": float(row["threshold_percent"]),
+        "cooldownMinutes": int(row["cooldown_minutes"]),
+        "enabled": bool(row["enabled"]),
+        "lastNotifiedAt": row["last_notified_at"],
+    }
+
+
+def active_notification_settings(user_id: int | str) -> list[dict]:
+    ensure_default_notification_settings(user_id)
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM notification_settings
+            WHERE user_id = ? AND enabled = 1
+            ORDER BY symbol
+            """,
+            (str(user_id),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_notification_event(
+    user_id: int | str,
+    setting_id: int | str,
+    coin_id: str,
+    symbol: str,
+    title: str,
+    message: str,
+    price_usd: Optional[float],
+    change_percent: Optional[float],
+) -> dict:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO notification_events
+                (user_id, setting_id, coin_id, symbol, title, message, price_usd, change_percent, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(user_id), str(setting_id), coin_id, symbol, title, message, price_usd, change_percent, now),
+        )
+        conn.execute(
+            """
+            UPDATE notification_settings
+            SET last_notified_at = ?, updated_at = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (now, now, str(setting_id), str(user_id)),
+        )
+        row = conn.execute(
+            "SELECT * FROM notification_events WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    return public_notification_event(row)
+
+
+def public_notification_event(row: sqlite3.Row | dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "coinId": row["coin_id"],
+        "symbol": row["symbol"],
+        "title": row["title"],
+        "message": row["message"],
+        "priceUsd": row["price_usd"],
+        "changePercent": row["change_percent"],
+        "createdAt": int(row["created_at"]),
+        "readAt": row["read_at"],
+    }
+
+
+def list_notification_events(user_id: int | str, limit: int = 30) -> list[dict]:
+    safe_limit = max(1, min(int(limit or 30), 100))
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM notification_events
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (str(user_id), safe_limit),
+        ).fetchall()
+    return [public_notification_event(row) for row in rows]
+
+
+def unread_notification_count(user_id: int | str) -> int:
+    with auth_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM notification_events
+            WHERE user_id = ? AND read_at IS NULL
+            """,
+            (str(user_id),),
+        ).fetchone()
+    return int(row["count"])
+
+
+def mark_notifications_read(user_id: int | str) -> None:
+    now = int(time.time())
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            UPDATE notification_events
+            SET read_at = COALESCE(read_at, ?)
+            WHERE user_id = ?
+            """,
+            (now, str(user_id)),
+        )
