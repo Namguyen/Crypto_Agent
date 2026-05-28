@@ -83,6 +83,13 @@ class AuthFlowTest(unittest.TestCase):
 
     def test_auth_pages_render_forms(self):
         with TestClient(self.app) as client:
+            index = client.get("/")
+            self.assertEqual(index.status_code, 200)
+            self.assertIn('id="friendsPanel"', index.text)
+            self.assertIn("API_FRIEND_REQUESTS", index.text)
+            self.assertIn("API_CONVERSATIONS", index.text)
+            self.assertIn('id="directChat"', index.text)
+
             login = client.get("/login")
             self.assertEqual(login.status_code, 200)
             self.assertIn('id="authForm"', login.text)
@@ -213,6 +220,169 @@ class AuthFlowTest(unittest.TestCase):
             read = client.post("/api/notifications/read", headers=headers)
             self.assertEqual(read.status_code, 200)
             self.assertEqual(read.json()["unreadCount"], 0)
+
+    def test_user_search_and_friend_requests(self):
+        with TestClient(self.app) as client:
+            seed_login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            seed_token = seed_login.json()["accessToken"]
+            seed_headers = {"Authorization": f"Bearer {seed_token}"}
+            seed_id = seed_login.json()["user"]["id"]
+
+            bob_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "socialbob",
+                    "email": "socialbob@example.com",
+                    "password": "password123",
+                },
+            )
+            bob_token = bob_register.json()["accessToken"]
+            bob_headers = {"Authorization": f"Bearer {bob_token}"}
+            bob_id = bob_register.json()["user"]["id"]
+
+            charlie_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "socialcharlie",
+                    "email": "socialcharlie@example.com",
+                    "password": "password123",
+                },
+            )
+            charlie_token = charlie_register.json()["accessToken"]
+            charlie_headers = {"Authorization": f"Bearer {charlie_token}"}
+            charlie_id = charlie_register.json()["user"]["id"]
+
+            search = client.get("/api/users/search?username=social", headers=seed_headers)
+            self.assertEqual(search.status_code, 200)
+            found_usernames = {user["username"] for user in search.json()["users"]}
+            self.assertIn("socialbob", found_usernames)
+            self.assertIn("socialcharlie", found_usernames)
+            self.assertNotIn("seed", found_usernames)
+
+            self_request = client.post(
+                "/api/friends/requests",
+                json={"to": seed_id},
+                headers=seed_headers,
+            )
+            self.assertEqual(self_request.status_code, 400)
+
+            request = client.post(
+                "/api/friends/requests",
+                json={"to": bob_id, "message": "Let's compare market notes."},
+                headers=seed_headers,
+            )
+            self.assertEqual(request.status_code, 201)
+            request_id = request.json()["request"]["id"]
+            self.assertEqual(request.json()["request"]["from"]["username"], "seed")
+            self.assertEqual(request.json()["request"]["to"]["username"], "socialbob")
+
+            duplicate = client.post(
+                "/api/friends/requests",
+                json={"to": bob_id},
+                headers=seed_headers,
+            )
+            self.assertEqual(duplicate.status_code, 409)
+
+            reverse_duplicate = client.post(
+                "/api/friends/requests",
+                json={"to": seed_id},
+                headers=bob_headers,
+            )
+            self.assertEqual(reverse_duplicate.status_code, 409)
+
+            bob_requests = client.get("/api/friends/requests", headers=bob_headers)
+            self.assertEqual(bob_requests.status_code, 200)
+            self.assertEqual(bob_requests.json()["received"][0]["id"], request_id)
+
+            forbidden_accept = client.post(
+                f"/api/friends/requests/{request_id}/accept",
+                headers=charlie_headers,
+            )
+            self.assertEqual(forbidden_accept.status_code, 403)
+
+            accepted = client.post(
+                f"/api/friends/requests/{request_id}/accept",
+                headers=bob_headers,
+            )
+            self.assertEqual(accepted.status_code, 200)
+            self.assertEqual(accepted.json()["friend"]["username"], "seed")
+
+            seed_friends = client.get("/api/friends", headers=seed_headers)
+            bob_friends = client.get("/api/friends", headers=bob_headers)
+            self.assertEqual(seed_friends.status_code, 200)
+            self.assertEqual(bob_friends.status_code, 200)
+            self.assertIn("socialbob", {friend["username"] for friend in seed_friends.json()["friends"]})
+            self.assertIn("seed", {friend["username"] for friend in bob_friends.json()["friends"]})
+
+            forbidden_conversation = client.post(
+                "/api/conversations/direct",
+                json={"friendId": charlie_id},
+                headers=seed_headers,
+            )
+            self.assertEqual(forbidden_conversation.status_code, 403)
+
+            direct_conversation = client.post(
+                "/api/conversations/direct",
+                json={"friendId": bob_id},
+                headers=seed_headers,
+            )
+            self.assertEqual(direct_conversation.status_code, 200)
+            conversation_id = direct_conversation.json()["conversation"]["id"]
+            self.assertEqual(direct_conversation.json()["conversation"]["otherUser"]["username"], "socialbob")
+
+            same_conversation = client.post(
+                "/api/conversations/direct",
+                json={"friendId": seed_id},
+                headers=bob_headers,
+            )
+            self.assertEqual(same_conversation.status_code, 200)
+            self.assertEqual(same_conversation.json()["conversation"]["id"], conversation_id)
+
+            sent_message = client.post(
+                f"/api/conversations/{conversation_id}/messages",
+                json={"content": "BTC moved fast today."},
+                headers=seed_headers,
+            )
+            self.assertEqual(sent_message.status_code, 201)
+            self.assertEqual(sent_message.json()["message"]["content"], "BTC moved fast today.")
+            self.assertTrue(sent_message.json()["message"]["isOwn"])
+
+            bob_messages = client.get(
+                f"/api/conversations/{conversation_id}/messages",
+                headers=bob_headers,
+            )
+            self.assertEqual(bob_messages.status_code, 200)
+            self.assertEqual(bob_messages.json()["messages"][0]["content"], "BTC moved fast today.")
+            self.assertFalse(bob_messages.json()["messages"][0]["isOwn"])
+
+            bob_conversations = client.get("/api/conversations", headers=bob_headers)
+            self.assertEqual(bob_conversations.status_code, 200)
+            self.assertEqual(bob_conversations.json()["conversations"][0]["unreadCount"], 1)
+
+            marked_read = client.post(
+                f"/api/conversations/{conversation_id}/read",
+                headers=bob_headers,
+            )
+            self.assertEqual(marked_read.status_code, 200)
+            bob_conversations_after_read = client.get("/api/conversations", headers=bob_headers)
+            self.assertEqual(bob_conversations_after_read.json()["conversations"][0]["unreadCount"], 0)
+
+            charlie_request = client.post(
+                "/api/friends/requests",
+                json={"to": charlie_id, "message": "Test decline flow."},
+                headers=seed_headers,
+            )
+            self.assertEqual(charlie_request.status_code, 201)
+            charlie_request_id = charlie_request.json()["request"]["id"]
+
+            declined = client.post(
+                f"/api/friends/requests/{charlie_request_id}/decline",
+                headers=charlie_headers,
+            )
+            self.assertEqual(declined.status_code, 200)
+
+            charlie_requests = client.get("/api/friends/requests", headers=charlie_headers)
+            self.assertEqual(charlie_requests.json()["received"], [])
 
     def test_missing_auth_blocks_chat(self):
         with TestClient(self.app) as client:

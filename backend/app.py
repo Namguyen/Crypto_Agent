@@ -44,6 +44,11 @@ from backend.auth.store import (
     upsert_env_user,
     verify_user_password,
 )
+from backend.chat.routes import router as chat_router
+from backend.chat.store import init_chat_db
+from backend.social.routes import router as social_router
+from backend.social.store import init_social_db
+from backend.users.routes import router as users_router
 
 dotenv.load_dotenv()
 
@@ -51,6 +56,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="Crypto Agent")
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "frontend" / "templates"))
+app.include_router(users_router)
+app.include_router(social_router)
+app.include_router(chat_router)
 
 APP_SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or secrets.token_hex(32)
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or APP_SECRET_KEY
@@ -73,6 +81,8 @@ SELF_AUTH_PASSWORD = os.getenv("SELF_AUTH_PASSWORD")
 SELF_AUTH_EMAIL = os.getenv("SELF_AUTH_EMAIL")
 
 init_auth_db()
+init_social_db()
+init_chat_db()
 cleanup_expired_refresh_tokens()
 if SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD:
     upsert_env_user(SELF_AUTH_USERNAME, SELF_AUTH_PASSWORD, SELF_AUTH_EMAIL)
