@@ -227,7 +227,8 @@
   let authenticatedState = false;
   let activeConversation = null;
   let messages = [];
-  let pollTimer = null;
+  let socket = null;
+  let reconnectTimer = null;
   let sending = false;
 
   function escapeHtml(value) {
@@ -297,6 +298,26 @@
     messagesRoot.scrollTop = messagesRoot.scrollHeight;
   }
 
+  function normalizeMessage(message) {
+    const currentUserId = window.cryptoAgentCurrentUserId?.() || '';
+    return {
+      ...message,
+      isOwn: String(message.senderId || '') === String(currentUserId),
+    };
+  }
+
+  function addOrReplaceMessage(message) {
+    if (!message?.id) return;
+    const normalized = normalizeMessage(message);
+    const index = messages.findIndex(item => String(item.id) === String(normalized.id));
+    if (index >= 0) {
+      messages[index] = normalized;
+    } else {
+      messages.push(normalized);
+    }
+    renderMessages();
+  }
+
   function showBubble() {
     if (!authenticatedState || !activeConversation?.id || panel.classList.contains('open')) {
       bubble.classList.remove('open');
@@ -310,7 +331,7 @@
   function hideAll() {
     bubble.classList.remove('open');
     panel.classList.remove('open');
-    stopPolling();
+    closeSocket();
   }
 
   async function refreshAccessToken() {
@@ -346,11 +367,49 @@
       const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/messages`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not load messages');
-      messages = data.messages || [];
+      messages = (data.messages || []).map(normalizeMessage);
       await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/read`, { method: 'POST' }, false);
       renderMessages();
     } catch (e) {
       if (!silent) renderMessages(e.message || 'Could not load messages');
+    }
+  }
+
+  function websocketUrl() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/ws?token=${encodeURIComponent(accessToken || '')}`;
+  }
+
+  async function connectSocket() {
+    if (!activeConversation?.id || !authenticatedState) return;
+    if (!accessToken && !await refreshAccessToken()) return;
+    closeSocket(false);
+    socket = new WebSocket(websocketUrl());
+    socket.onmessage = event => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'message') addOrReplaceMessage(payload.message);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    socket.onclose = () => {
+      socket = null;
+      if (panel.classList.contains('open') && authenticatedState && activeConversation?.id) {
+        reconnectTimer = setTimeout(connectSocket, 2000);
+      }
+    };
+  }
+
+  function closeSocket(clearReconnect = true) {
+    if (clearReconnect && reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+      socket = null;
     }
   }
 
@@ -368,7 +427,7 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not send message');
-      messages.push(data.message);
+      addOrReplaceMessage(data.message);
     } catch (e) {
       renderMessages(e.message || 'Could not send message');
       sending = false;
@@ -381,29 +440,19 @@
     input.focus();
   }
 
-  function startPolling() {
-    stopPolling();
-    pollTimer = setInterval(() => loadMessages(true), 8000);
-  }
-
-  function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = null;
-  }
-
   async function openPanel() {
     if (!activeConversation?.id || !authenticatedState) return;
     renderShell();
     bubble.classList.remove('open');
     panel.classList.add('open');
     await loadMessages(false);
-    startPolling();
+    await connectSocket();
     input.focus();
   }
 
   function minimizePanel() {
     panel.classList.remove('open');
-    stopPolling();
+    closeSocket();
     showBubble();
   }
 

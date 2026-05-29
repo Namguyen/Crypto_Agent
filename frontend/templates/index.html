@@ -2417,6 +2417,10 @@ function userInitial(user) {
   return value ? value[0].toUpperCase() : '?';
 }
 
+function isPictureSrc(value) {
+  return !!value && (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/uploads/'));
+}
+
 function renderProfilePanel() {
   const user = authState.user || {};
   const preview = document.getElementById('profileAvatarPreview');
@@ -2428,7 +2432,7 @@ function renderProfilePanel() {
   const saveBtn = document.getElementById('profileSaveBtn');
 
   if (preview) {
-    if (authState.authenticated && user.picture && user.picture.startsWith('http')) {
+    if (authState.authenticated && isPictureSrc(user.picture || '')) {
       preview.innerHTML = `<img src="${escape(user.picture)}" alt="" />`;
     } else {
       preview.textContent = authState.authenticated ? userInitial(user) : '?';
@@ -2615,6 +2619,7 @@ function renderAuthState() {
   const menuName = document.getElementById('accountMenuName');
   const menuUsername = document.getElementById('accountMenuUsername');
   window.cryptoAgentIsAuthenticated = () => authState.authenticated;
+  window.cryptoAgentCurrentUserId = () => authState.user?.id || '';
   window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
   if (!box || !avatar || !name || !btn) return;
 
@@ -2630,9 +2635,9 @@ function renderAuthState() {
     if (btnLabel) btnLabel.textContent = 'Sign out';
     if (initial) {
       initial.textContent = userInitialValue;
-      initial.style.display = user.picture && user.picture.startsWith('http') ? 'none' : 'grid';
+      initial.style.display = isPictureSrc(user.picture || '') ? 'none' : 'grid';
     }
-    if (user.picture && user.picture.startsWith('http')) {
+    if (isPictureSrc(user.picture || '')) {
       avatar.src = user.picture;
       avatar.style.display = '';
       if (menuAvatar) menuAvatar.innerHTML = `<img src="${escape(user.picture)}" alt="" />`;
@@ -2892,5 +2897,6 @@ async function init() {
 init();
 </script>
 {% include "partials/global_chat_bubble.html" %}
+{% include "partials/dev_live_reload.html" %}
 </body>
 </html>

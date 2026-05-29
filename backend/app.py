@@ -11,6 +11,7 @@ import dotenv
 import requests
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 try:
@@ -53,9 +54,12 @@ from backend.users.routes import router as users_router
 dotenv.load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT") or (PROJECT_ROOT / "uploads")).resolve()
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Crypto Agent")
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "frontend" / "templates"))
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
 app.include_router(users_router)
 app.include_router(social_router)
 app.include_router(chat_router)
@@ -79,6 +83,14 @@ REFRESH_COOKIE_PATH = "/api/auth"
 SELF_AUTH_USERNAME = os.getenv("SELF_AUTH_USERNAME")
 SELF_AUTH_PASSWORD = os.getenv("SELF_AUTH_PASSWORD")
 SELF_AUTH_EMAIL = os.getenv("SELF_AUTH_EMAIL")
+DEV_LIVE_RELOAD = os.getenv("DEV_LIVE_RELOAD", "true").lower() in {"1", "true", "yes", "on"}
+DEV_RELOAD_EXTENSIONS = {".py", ".html", ".css", ".js"}
+DEV_RELOAD_PATHS = [
+    PROJECT_ROOT / "app.py",
+    PROJECT_ROOT / "backend",
+    PROJECT_ROOT / "frontend" / "templates",
+]
+dev_reload_cache = {"checked_at": 0.0, "version": "0"}
 
 init_auth_db()
 init_social_db()
@@ -88,6 +100,29 @@ if SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD:
     upsert_env_user(SELF_AUTH_USERNAME, SELF_AUTH_PASSWORD, SELF_AUTH_EMAIL)
 
 conversation_histories = {}
+
+
+def source_reload_version() -> str:
+    now = time.monotonic()
+    if now - dev_reload_cache["checked_at"] < 0.75:
+        return dev_reload_cache["version"]
+
+    newest = 0
+    for source_path in DEV_RELOAD_PATHS:
+        if source_path.is_file():
+            newest = max(newest, source_path.stat().st_mtime_ns)
+            continue
+        if not source_path.exists():
+            continue
+        for path in source_path.rglob("*"):
+            if "__pycache__" in path.parts or not path.is_file():
+                continue
+            if path.suffix.lower() in DEV_RELOAD_EXTENSIONS:
+                newest = max(newest, path.stat().st_mtime_ns)
+
+    dev_reload_cache["checked_at"] = now
+    dev_reload_cache["version"] = str(newest)
+    return dev_reload_cache["version"]
 
 
 def registration_is_enabled() -> bool:
@@ -368,6 +403,11 @@ def check_price_notifications_for_user(user: dict) -> list[dict]:
 @app.get("/api/price-data")
 def price_data():
     return {"prices": price_sidebar_data()}
+
+
+@app.get("/api/dev/reload-version")
+def dev_reload_version():
+    return {"enabled": DEV_LIVE_RELOAD, "version": source_reload_version() if DEV_LIVE_RELOAD else "0"}
 
 
 @app.get("/api/auth/me")

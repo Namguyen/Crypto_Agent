@@ -1,0 +1,29 @@
+<script>
+(() => {
+  if (!['127.0.0.1', 'localhost'].includes(window.location.hostname)) return;
+
+  let currentVersion = null;
+
+  async function checkDevReload() {
+    try {
+      const res = await fetch('/api/dev/reload-version', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.enabled || !data.version) return;
+      if (currentVersion === null) {
+        currentVersion = data.version;
+        return;
+      }
+      if (data.version !== currentVersion) {
+        window.location.reload();
+      }
+    } catch (e) {
+      // The dev server may be restarting. The next successful check will decide.
+    }
+  }
+
+  setTimeout(() => {
+    checkDevReload();
+    setInterval(checkDevReload, 1500);
+  }, 1000);
+})();
+</script>

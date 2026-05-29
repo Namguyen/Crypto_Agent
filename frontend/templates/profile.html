@@ -156,9 +156,14 @@
         </div>
         <div class="field">
           <label for="profilePicture">PICTURE URL</label>
-          <input id="profilePicture" name="picture" type="url" placeholder="https://..." />
+          <input id="profilePicture" name="picture" type="text" placeholder="https://... or uploaded image path" />
+        </div>
+        <div class="field">
+          <label for="profilePictureFile">UPLOAD PROFILE PICTURE</label>
+          <input id="profilePictureFile" name="pictureFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
         </div>
         <div class="actions">
+          <button type="button" id="profileUploadBtn" onclick="uploadProfilePicture()">Upload Picture</button>
           <button type="button" onclick="loadAuth()">Reset</button>
           <button class="primary" id="profileSaveBtn" type="submit">Save Profile</button>
         </div>
@@ -172,6 +177,7 @@
     const API_AUTH_REFRESH = '/api/auth/refresh';
     const API_AUTH_LOGOUT = '/api/auth/logout';
     const API_USER_ME = '/api/users/me';
+    const API_USER_ME_PICTURE = '/api/users/me/picture';
     const AUTH_LOGIN = '/login';
 
     let accessToken = null;
@@ -190,6 +196,9 @@
     }
     function userName(user) {
       return user?.displayName || user?.name || user?.username || 'Signed in';
+    }
+    function isPictureSrc(value) {
+      return !!value && (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/uploads/'));
     }
     function applyAuthPayload(data) {
       if (data?.accessToken) accessToken = data.accessToken;
@@ -226,12 +235,13 @@
     function renderProfile() {
       const user = authState.user || {};
       window.cryptoAgentIsAuthenticated = () => authState.authenticated;
+      window.cryptoAgentCurrentUserId = () => authState.user?.id || '';
       window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
       document.getElementById('authStatus').textContent = authState.authenticated ? `Signed in as ${userName(user)}` : 'Login to edit your account profile';
       document.getElementById('authBtn').textContent = authState.authenticated ? 'Logout' : 'Login';
 
       const avatar = document.getElementById('profileAvatarPreview');
-      if (authState.authenticated && user.picture && user.picture.startsWith('http')) {
+      if (authState.authenticated && isPictureSrc(user.picture || '')) {
         avatar.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="" />`;
       } else {
         avatar.textContent = authState.authenticated ? userInitial(user) : '?';
@@ -281,8 +291,41 @@
       renderProfile();
       showToast('Profile saved');
     }
+    async function uploadProfilePicture() {
+      if (!authState.authenticated) {
+        showToast('Login required');
+        return;
+      }
+      const input = document.getElementById('profilePictureFile');
+      const file = input.files?.[0];
+      if (!file) {
+        showToast('Choose an image first');
+        return;
+      }
+      const uploadBtn = document.getElementById('profileUploadBtn');
+      uploadBtn.disabled = true;
+      try {
+        const res = await authFetch(API_USER_ME_PICTURE, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast(data.error || 'Could not upload picture');
+          return;
+        }
+        authState.user = data.user;
+        input.value = '';
+        renderProfile();
+        showToast('Profile picture uploaded');
+      } finally {
+        uploadBtn.disabled = !authState.authenticated;
+      }
+    }
     loadAuth();
   </script>
   {% include "partials/global_chat_bubble.html" %}
+  {% include "partials/dev_live_reload.html" %}
 </body>
 </html>

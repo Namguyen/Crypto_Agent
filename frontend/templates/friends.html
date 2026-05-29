@@ -254,6 +254,8 @@
     let directChatBubbleDrag = null;
     let directChatBubblePosition = null;
     let suppressBubbleClick = false;
+    let directChatSocket = null;
+    let directChatReconnectTimer = null;
 
     function escapeHtml(value) {
       return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -283,6 +285,59 @@
       } catch (e) {
         return '';
       }
+    }
+    function normalizeDirectMessage(message) {
+      return {
+        ...message,
+        isOwn: String(message.senderId || '') === String(authState.user?.id || ''),
+      };
+    }
+    function addOrReplaceDirectMessage(message) {
+      if (!message?.id) return;
+      const normalized = normalizeDirectMessage(message);
+      const index = directChatState.messages.findIndex(item => String(item.id) === String(normalized.id));
+      if (index >= 0) {
+        directChatState.messages[index] = normalized;
+      } else {
+        directChatState.messages.push(normalized);
+      }
+      renderDirectChat();
+    }
+    function directChatWebSocketUrl() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const conversation = directChatState.conversation;
+      return `${protocol}//${window.location.host}${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/ws?token=${encodeURIComponent(accessToken || '')}`;
+    }
+    function closeDirectChatSocket(clearReconnect = true) {
+      if (clearReconnect && directChatReconnectTimer) {
+        clearTimeout(directChatReconnectTimer);
+        directChatReconnectTimer = null;
+      }
+      if (directChatSocket) {
+        directChatSocket.onclose = null;
+        directChatSocket.close();
+        directChatSocket = null;
+      }
+    }
+    async function connectDirectChatSocket() {
+      if (!authState.authenticated || !directChatState.conversation?.id) return;
+      if (!accessToken && !await refreshAccessToken()) return;
+      closeDirectChatSocket(false);
+      directChatSocket = new WebSocket(directChatWebSocketUrl());
+      directChatSocket.onmessage = event => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'message') addOrReplaceDirectMessage(payload.message);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      directChatSocket.onclose = () => {
+        directChatSocket = null;
+        if (authState.authenticated && directChatState.conversation?.id) {
+          directChatReconnectTimer = setTimeout(connectDirectChatSocket, 2000);
+        }
+      };
     }
     function applyAuthPayload(data) {
       if (data?.accessToken) accessToken = data.accessToken;
@@ -341,6 +396,7 @@
       friendState = { friends: [], sent: [], received: [], searchResults: [] };
       directChatState = { conversation: null, messages: [] };
       localStorage.removeItem(DIRECT_CHAT_STORAGE_KEY);
+      closeDirectChatSocket();
       renderAuth();
       renderFriends();
     }
@@ -413,6 +469,7 @@
         saveDirectConversation(conversation);
         renderDirectChat();
         await loadDirectMessages();
+        await connectDirectChatSocket();
         return true;
       } catch (e) {
         showToast(e.message || 'Could not restore direct chat');
@@ -514,6 +571,7 @@
       saveDirectConversation(data.conversation);
       renderDirectChat();
       await loadDirectMessages();
+      await connectDirectChatSocket();
       document.getElementById('directChatInput').focus();
     }
     async function loadDirectMessages() {
@@ -525,7 +583,7 @@
         showToast(data.error || 'Could not load messages');
         return;
       }
-      directChatState.messages = data.messages || [];
+      directChatState.messages = (data.messages || []).map(normalizeDirectMessage);
       await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/read`, { method: 'POST' }, false);
       renderDirectChat();
     }
@@ -551,8 +609,7 @@
         showToast(data.error || 'Could not send message');
         return;
       }
-      directChatState.messages.push(data.message);
-      renderDirectChat();
+      addOrReplaceDirectMessage(data.message);
     }
     function minimizeDirectChat() {
       if (!directChatState.conversation) return;
@@ -608,5 +665,6 @@
     });
     loadAuth();
   </script>
+  {% include "partials/dev_live_reload.html" %}
 </body>
 </html>

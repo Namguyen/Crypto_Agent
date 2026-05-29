@@ -1,4 +1,7 @@
+import os
 import re
+import secrets
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -8,6 +11,40 @@ from backend.auth.store import get_user_by_id
 from backend.users.store import search_public_users, update_user_profile
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT") or (PROJECT_ROOT / "uploads")).resolve()
+PROFILE_PICTURE_DIR = UPLOAD_ROOT / "profile_pictures"
+PROFILE_PICTURE_DIR.mkdir(parents=True, exist_ok=True)
+MAX_PROFILE_PICTURE_BYTES = 4 * 1024 * 1024
+LOCAL_PROFILE_PICTURE_RE = r"/uploads/profile_pictures/[A-Za-z0-9_.-]+"
+
+
+def local_picture_path(public_url: str) -> Path | None:
+    if not public_url.startswith("/uploads/profile_pictures/"):
+        return None
+    candidate = (UPLOAD_ROOT / public_url.removeprefix("/uploads/")).resolve()
+    try:
+        candidate.relative_to(UPLOAD_ROOT)
+    except ValueError:
+        return None
+    return candidate
+
+
+def detect_image_extension(content: bytes, content_type: str) -> str | None:
+    value = (content_type or "").split(";", 1)[0].strip().lower()
+    signatures = {
+        "image/png": (".png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
+        "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
+        "image/webp": (".webp", lambda data: data.startswith(b"RIFF") and data[8:12] == b"WEBP"),
+        "image/gif": (".gif", lambda data: data.startswith((b"GIF87a", b"GIF89a"))),
+    }
+    if value in signatures and signatures[value][1](content):
+        return signatures[value][0]
+    for extension, matches in signatures.values():
+        if matches(content):
+            return extension
+    return None
 
 
 @router.get("/search")
@@ -30,8 +67,11 @@ async def update_me(request: Request, user=Depends(require_user)):
         return JSONResponse({"error": "Display name must be 80 characters or less"}, status_code=400)
     if len(bio) > 240:
         return JSONResponse({"error": "Bio must be 240 characters or less"}, status_code=400)
-    if picture and not re.fullmatch(r"https?://\S{3,500}", picture):
-        return JSONResponse({"error": "Picture must be an http or https URL"}, status_code=400)
+    if picture and not (
+        re.fullmatch(r"https?://\S{3,500}", picture)
+        or re.fullmatch(LOCAL_PROFILE_PICTURE_RE, picture)
+    ):
+        return JSONResponse({"error": "Picture must be an http(s) URL or uploaded profile picture"}, status_code=400)
 
     update_user_profile(
         user["id"],
@@ -40,3 +80,34 @@ async def update_me(request: Request, user=Depends(require_user)):
         picture=picture,
     )
     return {"user": get_user_by_id(user["id"])}
+
+
+@router.post("/me/picture")
+async def upload_profile_picture(request: Request, user=Depends(require_user)):
+    content = await request.body()
+    if not content:
+        return JSONResponse({"error": "Image file is required"}, status_code=400)
+    if len(content) > MAX_PROFILE_PICTURE_BYTES:
+        return JSONResponse({"error": "Profile picture must be 4 MB or smaller"}, status_code=413)
+
+    extension = detect_image_extension(content, request.headers.get("content-type", ""))
+    if not extension:
+        return JSONResponse({"error": "Profile picture must be PNG, JPEG, WebP, or GIF"}, status_code=400)
+
+    current_user = get_user_by_id(user["id"])
+    filename = f"user_{user['id']}_{secrets.token_urlsafe(12)}{extension}"
+    path = PROFILE_PICTURE_DIR / filename
+    path.write_bytes(content)
+
+    old_path = local_picture_path((current_user or {}).get("picture", ""))
+    if old_path and old_path.exists() and old_path != path:
+        old_path.unlink(missing_ok=True)
+
+    public_url = f"/uploads/profile_pictures/{filename}"
+    update_user_profile(
+        user["id"],
+        display_name=(current_user or {}).get("displayName", ""),
+        bio=(current_user or {}).get("bio", ""),
+        picture=public_url,
+    )
+    return {"user": get_user_by_id(user["id"]), "picture": public_url}

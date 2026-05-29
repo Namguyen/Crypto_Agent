@@ -20,6 +20,7 @@ class AuthFlowTest(unittest.TestCase):
         os.environ["SELF_AUTH_USERNAME"] = "seed"
         os.environ["SELF_AUTH_PASSWORD"] = "password123"
         os.environ["DEEPSEEK_API_KEY"] = "test"
+        os.environ["UPLOAD_ROOT"] = os.path.join(cls.tmp.name, "uploads")
 
         import app as app_module
 
@@ -103,6 +104,38 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(updated.json()["user"]["displayName"], "Seed Trader")
             self.assertEqual(updated.json()["user"]["bio"], "Macro-aware BTC and ETH watcher.")
 
+            png_bytes = (
+                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+                b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
+                b"\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00"
+                b"\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+            )
+            upload = client.post(
+                "/api/users/me/picture",
+                content=png_bytes,
+                headers={**headers, "Content-Type": "image/png"},
+            )
+            self.assertEqual(upload.status_code, 200)
+            picture = upload.json()["picture"]
+            self.assertTrue(picture.startswith("/uploads/profile_pictures/"))
+            self.assertEqual(upload.json()["user"]["picture"], picture)
+
+            image_response = client.get(picture)
+            self.assertEqual(image_response.status_code, 200)
+            self.assertEqual(image_response.content, png_bytes)
+
+            updated_with_uploaded_picture = client.patch(
+                "/api/users/me",
+                json={
+                    "displayName": "Seed Trader",
+                    "bio": "Macro-aware BTC and ETH watcher.",
+                    "picture": picture,
+                },
+                headers=headers,
+            )
+            self.assertEqual(updated_with_uploaded_picture.status_code, 200)
+            self.assertEqual(updated_with_uploaded_picture.json()["user"]["picture"], picture)
+
             me = client.get("/api/auth/me", headers=headers)
             self.assertEqual(me.json()["user"]["name"], "Seed Trader")
 
@@ -117,6 +150,8 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="globalDirectChatBubble"', index.text)
             self.assertIn('id="globalDirectChatPanel"', index.text)
             self.assertIn('id="globalDirectChatInput"', index.text)
+            self.assertIn("new WebSocket", index.text)
+            self.assertIn("/api/dev/reload-version", index.text)
             self.assertNotIn('data-initial-page=', index.text)
             self.assertNotIn('<div id="friendSearchResults"', index.text)
             self.assertNotIn('<section class="panel chat" id="socialChatCol"', index.text)
@@ -151,11 +186,17 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(login.status_code, 200)
             self.assertIn('id="authForm"', login.text)
             self.assertIn("/api/auth/login", login.text)
+            self.assertIn("/api/dev/reload-version", login.text)
 
             register = client.get("/register")
             self.assertEqual(register.status_code, 200)
             self.assertIn('id="authForm"', register.text)
             self.assertIn("/api/auth/register", register.text)
+
+            reload_version = client.get("/api/dev/reload-version")
+            self.assertEqual(reload_version.status_code, 200)
+            self.assertTrue(reload_version.json()["enabled"])
+            self.assertTrue(reload_version.json()["version"])
 
     def test_notes_are_scoped_to_user(self):
         seed_client = TestClient(self.app)
@@ -395,6 +436,19 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(same_conversation.status_code, 200)
             self.assertEqual(same_conversation.json()["conversation"]["id"], conversation_id)
 
+            with client.websocket_connect(
+                f"/api/conversations/{conversation_id}/ws?token={bob_token}"
+            ) as websocket:
+                live_message = client.post(
+                    f"/api/conversations/{conversation_id}/messages",
+                    json={"content": "Realtime BTC update."},
+                    headers=seed_headers,
+                )
+                self.assertEqual(live_message.status_code, 201)
+                event = websocket.receive_json()
+                self.assertEqual(event["type"], "message")
+                self.assertEqual(event["message"]["content"], "Realtime BTC update.")
+
             sent_message = client.post(
                 f"/api/conversations/{conversation_id}/messages",
                 json={"content": "BTC moved fast today."},
@@ -409,12 +463,16 @@ class AuthFlowTest(unittest.TestCase):
                 headers=bob_headers,
             )
             self.assertEqual(bob_messages.status_code, 200)
-            self.assertEqual(bob_messages.json()["messages"][0]["content"], "BTC moved fast today.")
-            self.assertFalse(bob_messages.json()["messages"][0]["isOwn"])
+            bob_message = next(
+                message
+                for message in bob_messages.json()["messages"]
+                if message["content"] == "BTC moved fast today."
+            )
+            self.assertFalse(bob_message["isOwn"])
 
             bob_conversations = client.get("/api/conversations", headers=bob_headers)
             self.assertEqual(bob_conversations.status_code, 200)
-            self.assertEqual(bob_conversations.json()["conversations"][0]["unreadCount"], 1)
+            self.assertEqual(bob_conversations.json()["conversations"][0]["unreadCount"], 2)
 
             marked_read = client.post(
                 f"/api/conversations/{conversation_id}/read",
