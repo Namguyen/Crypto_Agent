@@ -1,0 +1,142 @@
+<style>
+  .global-chat-bubble {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #ef9f27;
+    background: #15100a;
+    color: #ef9f27;
+    border-radius: 999px;
+    padding: 8px 12px;
+    cursor: grab;
+    z-index: 80;
+    user-select: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+  .global-chat-bubble.open { display: flex; }
+  .global-chat-bubble-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #ef9f27;
+    color: #111;
+    font-weight: 900;
+  }
+</style>
+
+<div class="global-chat-bubble" id="globalDirectChatBubble" title="Open direct chat">
+  <span class="global-chat-bubble-dot" id="globalDirectChatBubbleInitial">?</span>
+  <span id="globalDirectChatBubbleLabel">Direct chat</span>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'cryptoAgentDirectConversation';
+  const POSITION_KEY = 'cryptoAgentDirectBubblePosition';
+  const bubble = document.getElementById('globalDirectChatBubble');
+  const initial = document.getElementById('globalDirectChatBubbleInitial');
+  const label = document.getElementById('globalDirectChatBubbleLabel');
+  let drag = null;
+  let suppressClick = false;
+
+  function readConversation() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function readPosition() {
+    try {
+      return JSON.parse(localStorage.getItem(POSITION_KEY) || 'null');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writePosition(position) {
+    localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+  }
+
+  function applyPosition() {
+    const position = readPosition();
+    if (!position) return;
+    bubble.style.left = `${position.x}px`;
+    bubble.style.top = `${position.y}px`;
+    bubble.style.right = 'auto';
+    bubble.style.bottom = 'auto';
+  }
+
+  function sync(authenticated) {
+    const conversation = readConversation();
+    if (!authenticated || !conversation?.id) {
+      bubble.classList.remove('open');
+      return;
+    }
+    const name = conversation.otherName || 'Direct chat';
+    initial.textContent = (conversation.initial || name.slice(0, 1) || '?').toUpperCase();
+    label.textContent = name;
+    applyPosition();
+    bubble.classList.add('open');
+  }
+
+  bubble.addEventListener('click', () => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    const conversation = readConversation();
+    const suffix = conversation?.id ? `?conversation=${encodeURIComponent(conversation.id)}` : '';
+    window.location.href = `/friends${suffix}`;
+  });
+
+  bubble.addEventListener('pointerdown', event => {
+    const rect = bubble.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      moved: false,
+    };
+    bubble.setPointerCapture?.(event.pointerId);
+  });
+
+  window.addEventListener('pointermove', event => {
+    if (!drag) return;
+    drag.moved = true;
+    const x = Math.max(8, Math.min(window.innerWidth - bubble.offsetWidth - 8, event.clientX - drag.offsetX));
+    const y = Math.max(8, Math.min(window.innerHeight - bubble.offsetHeight - 8, event.clientY - drag.offsetY));
+    bubble.style.left = `${x}px`;
+    bubble.style.top = `${y}px`;
+    bubble.style.right = 'auto';
+    bubble.style.bottom = 'auto';
+    writePosition({ x, y });
+  });
+
+  window.addEventListener('pointerup', event => {
+    if (!drag) return;
+    suppressClick = drag.moved;
+    bubble.releasePointerCapture?.(event.pointerId);
+    drag = null;
+  });
+
+  window.addEventListener('storage', event => {
+    if (event.key === STORAGE_KEY || event.key === POSITION_KEY) {
+      const authenticated = window.cryptoAgentIsAuthenticated?.() || false;
+      sync(authenticated);
+    }
+  });
+
+  window.cryptoAgentGlobalChatBubble = { sync };
+})();
+</script>

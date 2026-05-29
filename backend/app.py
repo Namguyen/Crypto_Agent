@@ -536,28 +536,20 @@ def notes_clear(user=Depends(require_user)):
     return {"ok": True}
 
 
-def app_shell(request: Request, initial_page: str = "home"):
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {"initial_page": initial_page},
-    )
-
-
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return app_shell(request)
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/friends", response_class=HTMLResponse)
 def friends_page(request: Request):
-    return app_shell(request, "friends")
+    return templates.TemplateResponse(request, "friends.html")
 
 
 @app.get("/profiles", response_class=HTMLResponse)
 @app.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request):
-    return app_shell(request, "profiles")
+    return templates.TemplateResponse(request, "profile.html")
 
 
 @app.get("/login", response_class=HTMLResponse)

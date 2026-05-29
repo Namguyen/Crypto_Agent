@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Friends - Crypto Agent</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --panel: #10141d;
+      --line: #222936;
+      --text: #e8edf6;
+      --muted: #8c96a8;
+      --accent: #ef9f27;
+      --green: #41d08f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: inherit; text-decoration: none; }
+    .shell { max-width: 1180px; margin: 0 auto; padding: 18px; }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { font-size: 13px; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
+    .nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn, button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: #151a24;
+      color: var(--text);
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      cursor: pointer;
+    }
+    .btn.primary, button.primary { background: var(--accent); border-color: var(--accent); color: #111; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+      gap: 16px;
+      padding-top: 18px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      min-width: 0;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-title { font-size: 12px; font-weight: 900; letter-spacing: .08em; color: var(--accent); }
+    .panel-body { padding: 14px; }
+    .stack { display: flex; flex-direction: column; gap: 12px; }
+    .search { display: flex; gap: 8px; }
+    input {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      background: #080b10;
+      color: var(--text);
+      border-radius: 5px;
+      padding: 0 10px;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    .section-title { font-size: 10px; color: var(--muted); font-weight: 900; letter-spacing: .08em; margin-top: 6px; }
+    .item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid #1b2230;
+      background: #0c1018;
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .name { font-size: 13px; font-weight: 800; }
+    .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .empty { color: var(--muted); font-size: 12px; padding: 10px; border: 1px dashed #283140; border-radius: 6px; }
+    .chat {
+      min-height: 620px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .messages {
+      min-height: 420px;
+      max-height: 60vh;
+      overflow: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .message {
+      max-width: 72%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #171d28;
+      border: 1px solid #242c3a;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .message.own { align-self: flex-end; background: #211908; border-color: #5a3a0e; color: #ffdba0; }
+    .composer { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--line); }
+    .direct-chat-bubble {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--accent);
+      background: #15100a;
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: grab;
+      z-index: 50;
+      user-select: none;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .direct-chat-bubble.open { display: flex; }
+    .bubble-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: #111;
+      font-weight: 900;
+    }
+    .toast {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid var(--accent);
+      background: #10141d;
+      color: var(--accent);
+      padding: 9px 14px;
+      border-radius: 5px;
+      font-size: 12px;
+      z-index: 100;
+    }
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+      .chat { min-height: 520px; }
+      .message { max-width: 88%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div>
+        <div class="brand">CRYPTO AGENT SOCIAL</div>
+        <div class="meta" id="authName">Checking session...</div>
+      </div>
+      <nav class="nav">
+        <a class="btn" href="/">Agent</a>
+        <a class="btn" href="/profiles">Profile</a>
+        <button id="authBtn" type="button" onclick="handleAuthClick()">Login</button>
+      </nav>
+    </header>
+
+    <section class="grid">
+      <aside class="panel">
+        <div class="panel-head">
+          <span class="panel-title">FRIENDS</span>
+          <button type="button" onclick="loadFriends()">Refresh</button>
+        </div>
+        <div class="panel-body stack">
+          <div class="search">
+            <input id="friendSearchInput" type="search" placeholder="Search username" onkeydown="handleSearchKey(event)" />
+            <button class="primary" type="button" onclick="searchFriends()">Search</button>
+          </div>
+          <div class="section-title">SEARCH RESULTS</div>
+          <div id="friendSearchResults" class="stack"><div class="empty">Search by username to add a friend.</div></div>
+          <div class="section-title">RECEIVED REQUESTS</div>
+          <div id="friendReceivedRequests" class="stack"><div class="empty">No received requests.</div></div>
+          <div class="section-title">SENT REQUESTS</div>
+          <div id="friendSentRequests" class="stack"><div class="empty">No sent requests.</div></div>
+          <div class="section-title">FRIENDS LIST</div>
+          <div id="friendList" class="stack"><div class="empty">No friends yet.</div></div>
+        </div>
+      </aside>
+
+      <section class="panel chat" id="socialChatCol">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">DIRECT MESSAGES</div>
+            <div class="meta" id="socialChatTitle">Select a friend</div>
+          </div>
+          <button id="minimizeChatBtn" type="button" onclick="minimizeDirectChat()" disabled>Minimize</button>
+        </div>
+        <div class="messages" id="socialChatMessages">
+          <div class="empty">Open a friend chat to send direct messages.</div>
+        </div>
+        <div class="composer">
+          <input id="directChatInput" type="text" placeholder="Message a friend..." onkeydown="handleDirectChatKey(event)" disabled />
+          <button class="primary" id="sendDirectBtn" type="button" onclick="sendDirectChatMessage()" disabled>Send</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="direct-chat-bubble" id="directChatBubble" onclick="restoreDirectChat()" onpointerdown="startDirectChatBubbleDrag(event)">
+    <span class="bubble-dot" id="directChatBubbleInitial">?</span>
+    <span id="directChatBubbleLabel">Direct chat</span>
+  </div>
+  <div id="toastContainer"></div>
+
+  <script>
+    const API_AUTH_ME = '/api/auth/me';
+    const API_AUTH_REFRESH = '/api/auth/refresh';
+    const API_AUTH_LOGOUT = '/api/auth/logout';
+    const API_USER_SEARCH = '/api/users/search';
+    const API_FRIENDS = '/api/friends';
+    const API_FRIEND_REQUESTS = '/api/friends/requests';
+    const API_CONVERSATIONS = '/api/conversations';
+    const AUTH_LOGIN = '/login';
+    const DIRECT_CHAT_STORAGE_KEY = 'cryptoAgentDirectConversation';
+
+    let accessToken = null;
+    let authState = { authenticated: false, user: null };
+    let friendState = { friends: [], sent: [], received: [], searchResults: [] };
+    let directChatState = { conversation: null, messages: [] };
+    let directChatBubbleDrag = null;
+    let directChatBubblePosition = null;
+    let suppressBubbleClick = false;
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function escapeJS(value) {
+      return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    }
+    function showToast(message) {
+      document.getElementById('toastContainer').innerHTML = `<div class="toast">${escapeHtml(message)}</div>`;
+      setTimeout(() => { document.getElementById('toastContainer').innerHTML = ''; }, 2200);
+    }
+    function userLabel(user) {
+      return user?.displayName || user?.name || user?.username || 'Unknown';
+    }
+    function saveDirectConversation(conversation) {
+      if (!conversation?.id) return;
+      const otherName = userLabel(conversation.otherUser);
+      localStorage.setItem(DIRECT_CHAT_STORAGE_KEY, JSON.stringify({
+        id: conversation.id,
+        otherName,
+        initial: otherName.slice(0, 1).toUpperCase(),
+      }));
+    }
+    function storedConversationId() {
+      try {
+        return JSON.parse(localStorage.getItem(DIRECT_CHAT_STORAGE_KEY) || 'null')?.id || '';
+      } catch (e) {
+        return '';
+      }
+    }
+    function applyAuthPayload(data) {
+      if (data?.accessToken) accessToken = data.accessToken;
+      if (data?.user) authState = { authenticated: true, user: data.user };
+    }
+    async function refreshAccessToken() {
+      const res = await fetch(API_AUTH_REFRESH, { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.accessToken) return false;
+      applyAuthPayload(data);
+      return true;
+    }
+    async function authFetch(url, options = {}, retry = true) {
+      const headers = new Headers(options.headers || {});
+      if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+      const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+      if (res.status === 401 && retry && await refreshAccessToken()) {
+        return authFetch(url, options, false);
+      }
+      return res;
+    }
+    async function loadAuth() {
+      try {
+        await refreshAccessToken();
+        const res = await authFetch(API_AUTH_ME);
+        const data = await res.json().catch(() => ({}));
+        authState = { authenticated: !!data.authenticated, user: data.user || null };
+      } catch (e) {
+        accessToken = null;
+        authState = { authenticated: false, user: null };
+      }
+      renderAuth();
+      await loadFriends();
+      await restoreRequestedConversation();
+    }
+    function renderAuth() {
+      const name = document.getElementById('authName');
+      const btn = document.getElementById('authBtn');
+      if (authState.authenticated) {
+        name.textContent = `Signed in as ${userLabel(authState.user)}`;
+        btn.textContent = 'Logout';
+      } else {
+        name.textContent = 'Login to manage friends and messages';
+        btn.textContent = 'Login';
+      }
+      renderDirectChat();
+    }
+    async function handleAuthClick() {
+      if (!authState.authenticated) {
+        window.location.href = AUTH_LOGIN;
+        return;
+      }
+      await authFetch(API_AUTH_LOGOUT, { method: 'POST' }, false);
+      accessToken = null;
+      authState = { authenticated: false, user: null };
+      friendState = { friends: [], sent: [], received: [], searchResults: [] };
+      directChatState = { conversation: null, messages: [] };
+      localStorage.removeItem(DIRECT_CHAT_STORAGE_KEY);
+      renderAuth();
+      renderFriends();
+    }
+    function item(user, actionHtml = '', meta = '') {
+      return `<div class="item"><div><div class="name">${escapeHtml(userLabel(user))}</div><div class="meta">${escapeHtml(meta || `@${user.username || user.id}`)}</div></div>${actionHtml ? `<div class="actions">${actionHtml}</div>` : ''}</div>`;
+    }
+    function renderFriends() {
+      const results = document.getElementById('friendSearchResults');
+      const received = document.getElementById('friendReceivedRequests');
+      const sent = document.getElementById('friendSentRequests');
+      const friends = document.getElementById('friendList');
+      if (!authState.authenticated) {
+        results.innerHTML = '<div class="empty">Login to search users and manage friends.</div>';
+        received.innerHTML = sent.innerHTML = friends.innerHTML = '';
+        return;
+      }
+      results.innerHTML = friendState.searchResults.length
+        ? friendState.searchResults.map(user => item(user, `<button type="button" onclick="sendFriendRequest('${escapeJS(user.id)}')">Add</button>`)).join('')
+        : '<div class="empty">Search by username to add a friend.</div>';
+      received.innerHTML = friendState.received.length
+        ? friendState.received.map(req => item(req.from, `<button type="button" onclick="acceptFriendRequest('${escapeJS(req.id)}')">Accept</button><button type="button" onclick="declineFriendRequest('${escapeJS(req.id)}')">Decline</button>`, req.message || 'Wants to connect')).join('')
+        : '<div class="empty">No received requests.</div>';
+      sent.innerHTML = friendState.sent.length
+        ? friendState.sent.map(req => item(req.to, '', req.message || 'Pending')).join('')
+        : '<div class="empty">No sent requests.</div>';
+      friends.innerHTML = friendState.friends.length
+        ? friendState.friends.map(user => item(user, `<button class="primary" type="button" onclick="openDirectChat('${escapeJS(user.id)}')">Message</button>`, 'Friend')).join('')
+        : '<div class="empty">No friends yet.</div>';
+    }
+    function applyFriendPayload(data) {
+      if (data.friends) friendState.friends = data.friends;
+      if (data.sent || data.received) {
+        friendState.sent = data.sent || [];
+        friendState.received = data.received || [];
+      }
+      renderFriends();
+    }
+    async function loadFriends() {
+      if (!authState.authenticated) {
+        renderFriends();
+        return;
+      }
+      try {
+        const [friendsRes, requestsRes] = await Promise.all([authFetch(API_FRIENDS), authFetch(API_FRIEND_REQUESTS)]);
+        const friendsData = await friendsRes.json().catch(() => ({}));
+        const requestsData = await requestsRes.json().catch(() => ({}));
+        if (!friendsRes.ok) throw new Error(friendsData.error || 'Could not load friends');
+        if (!requestsRes.ok) throw new Error(requestsData.error || 'Could not load friend requests');
+        applyFriendPayload(friendsData);
+        applyFriendPayload(requestsData);
+      } catch (e) {
+        showToast(e.message || 'Could not load friends');
+      }
+    }
+    async function restoreRequestedConversation() {
+      if (!authState.authenticated) return;
+      const params = new URLSearchParams(window.location.search);
+      const conversationId = params.get('conversation') || storedConversationId();
+      if (!conversationId) return;
+      await openConversationById(conversationId);
+    }
+    async function openConversationById(conversationId) {
+      try {
+        const res = await authFetch(API_CONVERSATIONS);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not load conversations');
+        const conversation = (data.conversations || []).find(item => String(item.id) === String(conversationId));
+        if (!conversation) return false;
+        directChatState = { conversation, messages: [] };
+        saveDirectConversation(conversation);
+        renderDirectChat();
+        await loadDirectMessages();
+        return true;
+      } catch (e) {
+        showToast(e.message || 'Could not restore direct chat');
+        return false;
+      }
+    }
+    function handleSearchKey(event) {
+      if (event.key === 'Enter') searchFriends();
+    }
+    async function searchFriends() {
+      const query = document.getElementById('friendSearchInput').value.trim();
+      if (query.length < 2) {
+        friendState.searchResults = [];
+        renderFriends();
+        return;
+      }
+      const res = await authFetch(`${API_USER_SEARCH}?username=${encodeURIComponent(query)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not search users');
+        return;
+      }
+      friendState.searchResults = data.users || [];
+      renderFriends();
+    }
+    async function sendFriendRequest(userId) {
+      const res = await authFetch(API_FRIEND_REQUESTS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not send friend request');
+        return;
+      }
+      friendState.searchResults = friendState.searchResults.filter(user => String(user.id) !== String(userId));
+      await loadFriends();
+      showToast('Friend request sent');
+    }
+    async function acceptFriendRequest(requestId) {
+      const res = await authFetch(`${API_FRIEND_REQUESTS}/${encodeURIComponent(requestId)}/accept`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not accept friend request');
+        return;
+      }
+      await loadFriends();
+      showToast('Friend added');
+    }
+    async function declineFriendRequest(requestId) {
+      const res = await authFetch(`${API_FRIEND_REQUESTS}/${encodeURIComponent(requestId)}/decline`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) showToast(data.error || 'Could not decline friend request');
+      await loadFriends();
+    }
+    function renderDirectChat() {
+      const title = document.getElementById('socialChatTitle');
+      const messages = document.getElementById('socialChatMessages');
+      const input = document.getElementById('directChatInput');
+      const send = document.getElementById('sendDirectBtn');
+      const min = document.getElementById('minimizeChatBtn');
+      const bubble = document.getElementById('directChatBubble');
+      const conversation = directChatState.conversation;
+      bubble.classList.remove('open');
+      if (!authState.authenticated) {
+        title.textContent = 'Login required';
+        messages.innerHTML = '<div class="empty">Login to send direct messages.</div>';
+        input.disabled = send.disabled = min.disabled = true;
+        return;
+      }
+      if (!conversation) {
+        title.textContent = 'Select a friend';
+        messages.innerHTML = '<div class="empty">Open a friend chat to send direct messages.</div>';
+        input.disabled = send.disabled = min.disabled = true;
+        return;
+      }
+      const otherName = userLabel(conversation.otherUser);
+      title.textContent = otherName;
+      input.disabled = send.disabled = min.disabled = false;
+      input.placeholder = `Message ${otherName}...`;
+      messages.innerHTML = directChatState.messages.length
+        ? directChatState.messages.map(message => `<div class="message ${message.isOwn ? 'own' : ''}">${escapeHtml(message.content)}</div>`).join('')
+        : '<div class="empty">No messages yet. Start the conversation below.</div>';
+      messages.scrollTop = messages.scrollHeight;
+    }
+    async function openDirectChat(friendId) {
+      const res = await authFetch(`${API_CONVERSATIONS}/direct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not open conversation');
+        return;
+      }
+      directChatState = { conversation: data.conversation, messages: [] };
+      saveDirectConversation(data.conversation);
+      renderDirectChat();
+      await loadDirectMessages();
+      document.getElementById('directChatInput').focus();
+    }
+    async function loadDirectMessages() {
+      const conversation = directChatState.conversation;
+      if (!conversation) return;
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/messages`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not load messages');
+        return;
+      }
+      directChatState.messages = data.messages || [];
+      await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/read`, { method: 'POST' }, false);
+      renderDirectChat();
+    }
+    function handleDirectChatKey(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        sendDirectChatMessage();
+      }
+    }
+    async function sendDirectChatMessage() {
+      const conversation = directChatState.conversation;
+      const input = document.getElementById('directChatInput');
+      const content = input.value.trim();
+      if (!conversation || !content) return;
+      input.value = '';
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not send message');
+        return;
+      }
+      directChatState.messages.push(data.message);
+      renderDirectChat();
+    }
+    function minimizeDirectChat() {
+      if (!directChatState.conversation) return;
+      const bubble = document.getElementById('directChatBubble');
+      const otherName = userLabel(directChatState.conversation.otherUser);
+      saveDirectConversation(directChatState.conversation);
+      document.getElementById('directChatBubbleInitial').textContent = otherName.slice(0, 1).toUpperCase();
+      document.getElementById('directChatBubbleLabel').textContent = otherName;
+      if (directChatBubblePosition) {
+        bubble.style.left = `${directChatBubblePosition.x}px`;
+        bubble.style.top = `${directChatBubblePosition.y}px`;
+        bubble.style.right = 'auto';
+        bubble.style.bottom = 'auto';
+      }
+      bubble.classList.add('open');
+    }
+    function restoreDirectChat() {
+      if (suppressBubbleClick) {
+        suppressBubbleClick = false;
+        return;
+      }
+      document.getElementById('directChatBubble').classList.remove('open');
+      document.getElementById('directChatInput').focus();
+    }
+    function startDirectChatBubbleDrag(event) {
+      const bubble = document.getElementById('directChatBubble');
+      const rect = bubble.getBoundingClientRect();
+      directChatBubbleDrag = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+        moved: false,
+      };
+      bubble.setPointerCapture?.(event.pointerId);
+    }
+    window.addEventListener('pointermove', event => {
+      if (!directChatBubbleDrag) return;
+      directChatBubbleDrag.moved = true;
+      const bubble = document.getElementById('directChatBubble');
+      const x = Math.max(8, Math.min(window.innerWidth - bubble.offsetWidth - 8, event.clientX - directChatBubbleDrag.offsetX));
+      const y = Math.max(8, Math.min(window.innerHeight - bubble.offsetHeight - 8, event.clientY - directChatBubbleDrag.offsetY));
+      directChatBubblePosition = { x, y };
+      bubble.style.left = `${x}px`;
+      bubble.style.top = `${y}px`;
+      bubble.style.right = 'auto';
+      bubble.style.bottom = 'auto';
+    });
+    window.addEventListener('pointerup', event => {
+      if (!directChatBubbleDrag) return;
+      suppressBubbleClick = directChatBubbleDrag.moved;
+      document.getElementById('directChatBubble').releasePointerCapture?.(event.pointerId);
+      directChatBubbleDrag = null;
+    });
+    loadAuth();
+  </script>
+</body>
+</html>

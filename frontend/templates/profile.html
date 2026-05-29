@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Profile - Crypto Agent</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --panel: #10141d;
+      --line: #222936;
+      --text: #e8edf6;
+      --muted: #8c96a8;
+      --accent: #ef9f27;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: inherit; text-decoration: none; }
+    .shell { max-width: 920px; margin: 0 auto; padding: 18px; }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { font-size: 13px; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
+    .nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn, button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      background: #151a24;
+      color: var(--text);
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #111; }
+    button:disabled, input:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
+    .profile {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .profile-head {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .avatar {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: #1a2130;
+      border: 1px solid #30394a;
+      color: var(--accent);
+      font-size: 30px;
+      font-weight: 900;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .name { font-size: 22px; font-weight: 900; line-height: 1.2; }
+    .username { color: var(--muted); font-size: 13px; margin-top: 5px; }
+    .bio { color: #c9d1df; font-size: 14px; line-height: 1.5; margin-top: 10px; white-space: pre-wrap; }
+    .form {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .field { display: grid; gap: 7px; }
+    label { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #080b10;
+      color: var(--text);
+      border-radius: 5px;
+      padding: 10px;
+      outline: none;
+      font: inherit;
+    }
+    textarea { min-height: 110px; resize: vertical; line-height: 1.45; }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .toast {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid var(--accent);
+      background: #10141d;
+      color: var(--accent);
+      padding: 9px 14px;
+      border-radius: 5px;
+      font-size: 12px;
+      z-index: 100;
+    }
+    @media (max-width: 620px) {
+      .profile-head { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div>
+        <div class="brand">CRYPTO AGENT PROFILE</div>
+        <div class="hint" id="authStatus">Checking session...</div>
+      </div>
+      <nav class="nav">
+        <a class="btn" href="/">Agent</a>
+        <a class="btn" href="/friends">Friends</a>
+        <button id="authBtn" type="button" onclick="handleAuthClick()">Login</button>
+      </nav>
+    </header>
+
+    <section class="profile">
+      <div class="profile-head">
+        <div class="avatar" id="profileAvatarPreview">?</div>
+        <div>
+          <div class="name" id="profileNamePreview">Guest</div>
+          <div class="username" id="profileUsernamePreview">Login to edit your profile</div>
+          <div class="bio" id="profileBioPreview"></div>
+        </div>
+      </div>
+      <form class="form" id="profileForm" onsubmit="saveProfile(event)">
+        <div class="field">
+          <label for="profileDisplayName">DISPLAY NAME</label>
+          <input id="profileDisplayName" name="displayName" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label for="profileBio">BIO</label>
+          <textarea id="profileBio" name="bio"></textarea>
+        </div>
+        <div class="field">
+          <label for="profilePicture">PICTURE URL</label>
+          <input id="profilePicture" name="picture" type="url" placeholder="https://..." />
+        </div>
+        <div class="actions">
+          <button type="button" onclick="loadAuth()">Reset</button>
+          <button class="primary" id="profileSaveBtn" type="submit">Save Profile</button>
+        </div>
+      </form>
+    </section>
+  </main>
+  <div id="toastContainer"></div>
+
+  <script>
+    const API_AUTH_ME = '/api/auth/me';
+    const API_AUTH_REFRESH = '/api/auth/refresh';
+    const API_AUTH_LOGOUT = '/api/auth/logout';
+    const API_USER_ME = '/api/users/me';
+    const AUTH_LOGIN = '/login';
+
+    let accessToken = null;
+    let authState = { authenticated: false, user: null };
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function showToast(message) {
+      document.getElementById('toastContainer').innerHTML = `<div class="toast">${escapeHtml(message)}</div>`;
+      setTimeout(() => { document.getElementById('toastContainer').innerHTML = ''; }, 2200);
+    }
+    function userInitial(user) {
+      const value = (user?.displayName || user?.name || user?.username || '?').trim();
+      return value ? value[0].toUpperCase() : '?';
+    }
+    function userName(user) {
+      return user?.displayName || user?.name || user?.username || 'Signed in';
+    }
+    function applyAuthPayload(data) {
+      if (data?.accessToken) accessToken = data.accessToken;
+      if (data?.user) authState = { authenticated: true, user: data.user };
+    }
+    async function refreshAccessToken() {
+      const res = await fetch(API_AUTH_REFRESH, { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.accessToken) return false;
+      applyAuthPayload(data);
+      return true;
+    }
+    async function authFetch(url, options = {}, retry = true) {
+      const headers = new Headers(options.headers || {});
+      if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+      const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+      if (res.status === 401 && retry && await refreshAccessToken()) {
+        return authFetch(url, options, false);
+      }
+      return res;
+    }
+    async function loadAuth() {
+      try {
+        await refreshAccessToken();
+        const res = await authFetch(API_AUTH_ME);
+        const data = await res.json().catch(() => ({}));
+        authState = { authenticated: !!data.authenticated, user: data.user || null };
+      } catch (e) {
+        accessToken = null;
+        authState = { authenticated: false, user: null };
+      }
+      renderProfile();
+    }
+    function renderProfile() {
+      const user = authState.user || {};
+      window.cryptoAgentIsAuthenticated = () => authState.authenticated;
+      window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
+      document.getElementById('authStatus').textContent = authState.authenticated ? `Signed in as ${userName(user)}` : 'Login to edit your account profile';
+      document.getElementById('authBtn').textContent = authState.authenticated ? 'Logout' : 'Login';
+
+      const avatar = document.getElementById('profileAvatarPreview');
+      if (authState.authenticated && user.picture && user.picture.startsWith('http')) {
+        avatar.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="" />`;
+      } else {
+        avatar.textContent = authState.authenticated ? userInitial(user) : '?';
+      }
+      document.getElementById('profileNamePreview').textContent = authState.authenticated ? userName(user) : 'Guest';
+      document.getElementById('profileUsernamePreview').textContent = authState.authenticated ? `@${user.username || 'local-user'}` : 'Login to edit your profile';
+      document.getElementById('profileBioPreview').textContent = authState.authenticated ? (user.bio || '') : '';
+
+      document.getElementById('profileDisplayName').value = authState.authenticated ? (user.displayName || user.name || '') : '';
+      document.getElementById('profileBio').value = authState.authenticated ? (user.bio || '') : '';
+      document.getElementById('profilePicture').value = authState.authenticated ? (user.picture || '') : '';
+      for (const el of document.querySelectorAll('#profileForm input, #profileForm textarea, #profileForm button')) {
+        el.disabled = !authState.authenticated;
+      }
+    }
+    async function handleAuthClick() {
+      if (!authState.authenticated) {
+        window.location.href = AUTH_LOGIN;
+        return;
+      }
+      await authFetch(API_AUTH_LOGOUT, { method: 'POST' }, false);
+      accessToken = null;
+      authState = { authenticated: false, user: null };
+      localStorage.removeItem('cryptoAgentDirectConversation');
+      renderProfile();
+    }
+    async function saveProfile(event) {
+      event.preventDefault();
+      if (!authState.authenticated) {
+        showToast('Login required');
+        return;
+      }
+      const displayName = document.getElementById('profileDisplayName').value.trim();
+      const bio = document.getElementById('profileBio').value.trim();
+      const picture = document.getElementById('profilePicture').value.trim();
+      const res = await authFetch(API_USER_ME, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName, bio, picture }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not save profile');
+        return;
+      }
+      authState.user = data.user;
+      renderProfile();
+      showToast('Profile saved');
+    }
+    loadAuth();
+  </script>
+  {% include "partials/global_chat_bubble.html" %}
+</body>
+</html>

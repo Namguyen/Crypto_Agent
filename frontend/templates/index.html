@@ -1099,7 +1099,7 @@
     }
   </style>
 </head>
-<body data-initial-page="{{ initial_page | default('home') }}">
+<body>
 
 <div class="root" id="root">
   <!-- Header -->
@@ -2434,6 +2434,8 @@ function renderAuthState() {
   const name = document.getElementById('authName');
   const btn = document.getElementById('authBtn');
   const registerBtn = document.getElementById('registerBtn');
+  window.cryptoAgentIsAuthenticated = () => authState.authenticated;
+  window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
   if (!box || !avatar || !name || !btn) return;
 
   box.classList.toggle('signed-in', authState.authenticated);
@@ -2482,6 +2484,7 @@ async function handleAuthClick() {
     friendState = { friends: [], sent: [], received: [], searchResults: [] };
     directChatState = { conversation: null, messages: [] };
     directChatMinimized = false;
+    localStorage.removeItem('cryptoAgentDirectConversation');
     closeToolPanels();
     renderAuthState();
     renderNotes();
@@ -2653,5 +2656,6 @@ async function init() {
 
 init();
 </script>
+{% include "partials/global_chat_bubble.html" %}
 </body>
 </html>
