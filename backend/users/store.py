@@ -49,6 +49,24 @@ def get_public_user_profile(user_id: int | str) -> dict | None:
     return public_user_profile(row) if row else None
 
 
+def get_public_user_profile_by_ref(user_ref: str) -> dict | None:
+    value = (user_ref or "").strip()
+    if not value:
+        return None
+
+    with auth_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, username, display_name, bio, picture
+            FROM users
+            WHERE id = ?
+               OR username = ? COLLATE NOCASE
+            """,
+            (value, value),
+        ).fetchone()
+    return public_user_profile(row) if row else None
+
+
 def update_user_profile(
     user_id: int | str,
     *,

@@ -1,8 +1,17 @@
 <style>
-  .global-chat-bubble {
+  .global-chat-dock {
     position: fixed;
-    right: 22px;
-    bottom: 22px;
+    right: 18px;
+    bottom: 18px;
+    z-index: 80;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .global-chat-bubble {
+    pointer-events: auto;
     display: none;
     align-items: center;
     gap: 8px;
@@ -10,9 +19,8 @@
     background: #15100a;
     color: #ef9f27;
     border-radius: 999px;
-    padding: 8px 12px;
-    cursor: grab;
-    z-index: 80;
+    padding: 8px 10px 8px 12px;
+    cursor: pointer;
     user-select: none;
     box-shadow: 0 10px 30px rgba(0,0,0,.35);
     font-family: Arial, Helvetica, sans-serif;
@@ -31,11 +39,55 @@
     color: #111;
     font-weight: 900;
   }
-  .global-chat-panel {
+  .global-chat-bubble-label {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .global-chat-bubble-count {
+    display: none;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #ef9f27;
+    color: #111;
+    font-size: 10px;
+    font-weight: 900;
+  }
+  .global-chat-bubble-count.visible { display: inline-flex; }
+  .global-chat-bubble-close {
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(239,159,39,.45);
+    background: transparent;
+    color: #ef9f27;
+    border-radius: 50%;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    padding: 0;
+  }
+  .global-chat-panels {
     position: fixed;
-    right: 22px;
-    bottom: 22px;
-    width: min(360px, calc(100vw - 24px));
+    right: 18px;
+    bottom: 18px;
+    z-index: 82;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 12px;
+    max-width: calc(100vw - 36px);
+    overflow-x: auto;
+    pointer-events: none;
+  }
+  .global-chat-panel {
+    pointer-events: auto;
+    flex: 0 0 min(340px, calc(100vw - 24px));
+    width: min(340px, calc(100vw - 24px));
     height: min(510px, calc(100vh - 36px));
     display: none;
     grid-template-rows: auto 1fr auto;
@@ -43,7 +95,6 @@
     border: 1px solid #252d3c;
     border-radius: 8px;
     overflow: hidden;
-    z-index: 82;
     box-shadow: 0 18px 42px rgba(0,0,0,.5);
     font-family: Arial, Helvetica, sans-serif;
     color: #e8edf6;
@@ -174,62 +225,36 @@
     opacity: .55;
     cursor: not-allowed;
   }
+  @media (max-width: 780px) {
+    .global-chat-panels {
+      left: 12px;
+      right: 12px;
+      flex-direction: column;
+    }
+    .global-chat-panel { width: 100%; }
+  }
 </style>
 
-<div class="global-chat-bubble" id="globalDirectChatBubble" title="Open direct chat">
-  <span class="global-chat-bubble-dot" id="globalDirectChatBubbleInitial">?</span>
-  <span id="globalDirectChatBubbleLabel">Direct chat</span>
-</div>
-
-<section class="global-chat-panel" id="globalDirectChatPanel" aria-label="Direct chat">
-  <div class="global-chat-head">
-    <div class="global-chat-avatar" id="globalDirectChatPanelInitial">?</div>
-    <div>
-      <div class="global-chat-title" id="globalDirectChatPanelTitle">Direct chat</div>
-      <div class="global-chat-subtitle">Floating chat</div>
-    </div>
-    <div class="global-chat-actions">
-      <button class="global-chat-icon-btn" type="button" title="Open full chat" id="globalDirectChatFullBtn">F</button>
-      <button class="global-chat-icon-btn" type="button" title="Minimize" id="globalDirectChatMinBtn">-</button>
-    </div>
-  </div>
-  <div class="global-chat-messages" id="globalDirectChatMessages">
-    <div class="global-chat-empty">Open a direct chat from Friends first.</div>
-  </div>
-  <div class="global-chat-composer">
-    <input class="global-chat-input" id="globalDirectChatInput" type="text" placeholder="Message..." disabled />
-    <button class="global-chat-send" id="globalDirectChatSendBtn" type="button" disabled>Send</button>
-  </div>
-</section>
+<div class="global-chat-panels" id="globalDirectChatPanels"></div>
+<div class="global-chat-dock" id="globalDirectChatDock"></div>
 
 <script>
 (() => {
-  const STORAGE_KEY = 'cryptoAgentDirectConversation';
-  const POSITION_KEY = 'cryptoAgentDirectBubblePosition';
+  const LEGACY_STORAGE_KEY = 'cryptoAgentDirectConversation';
+  const STORAGE_KEY = 'cryptoAgentDirectConversations';
+  const DISMISSED_STORAGE_KEY = 'cryptoAgentDismissedDirectConversations';
   const API_AUTH_REFRESH = '/api/auth/refresh';
   const API_CONVERSATIONS = '/api/conversations';
+  const CONVERSATION_POLL_MS = 15000;
 
-  const bubble = document.getElementById('globalDirectChatBubble');
-  const bubbleInitial = document.getElementById('globalDirectChatBubbleInitial');
-  const bubbleLabel = document.getElementById('globalDirectChatBubbleLabel');
-  const panel = document.getElementById('globalDirectChatPanel');
-  const panelInitial = document.getElementById('globalDirectChatPanelInitial');
-  const panelTitle = document.getElementById('globalDirectChatPanelTitle');
-  const messagesRoot = document.getElementById('globalDirectChatMessages');
-  const input = document.getElementById('globalDirectChatInput');
-  const sendBtn = document.getElementById('globalDirectChatSendBtn');
-  const minBtn = document.getElementById('globalDirectChatMinBtn');
-  const fullBtn = document.getElementById('globalDirectChatFullBtn');
+  const dock = document.getElementById('globalDirectChatDock');
+  const panelsRoot = document.getElementById('globalDirectChatPanels');
+  const chats = new Map();
+  const seenLastMessageIds = new Map();
 
-  let drag = null;
-  let suppressClick = false;
   let accessToken = null;
   let authenticatedState = false;
-  let activeConversation = null;
-  let messages = [];
-  let socket = null;
-  let reconnectTimer = null;
-  let sending = false;
+  let conversationPoll = null;
 
   function escapeHtml(value) {
     return String(value || '')
@@ -239,99 +264,92 @@
       .replace(/"/g, '&quot;');
   }
 
-  function readConversation() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function readPosition() {
-    try {
-      return JSON.parse(localStorage.getItem(POSITION_KEY) || 'null');
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function writePosition(position) {
-    localStorage.setItem(POSITION_KEY, JSON.stringify(position));
-  }
-
-  function applyPosition() {
-    const position = readPosition();
-    if (!position) return;
-    bubble.style.left = `${position.x}px`;
-    bubble.style.top = `${position.y}px`;
-    bubble.style.right = 'auto';
-    bubble.style.bottom = 'auto';
-  }
-
-  function conversationName() {
-    return activeConversation?.otherName || 'Direct chat';
-  }
-
-  function conversationInitial() {
-    return (activeConversation?.initial || conversationName().slice(0, 1) || '?').toUpperCase();
-  }
-
-  function renderShell() {
-    const name = conversationName();
-    const initial = conversationInitial();
-    bubbleInitial.textContent = initial;
-    bubbleLabel.textContent = name;
-    panelInitial.textContent = initial;
-    panelTitle.textContent = name;
-  }
-
-  function renderMessages(statusText = '') {
-    input.disabled = !activeConversation || !authenticatedState || sending;
-    sendBtn.disabled = input.disabled;
-    if (statusText) {
-      messagesRoot.innerHTML = `<div class="global-chat-empty">${escapeHtml(statusText)}</div>`;
-      return;
-    }
-    messagesRoot.innerHTML = messages.length
-      ? messages.map(message => `<div class="global-chat-message ${message.isOwn ? 'own' : ''}">${escapeHtml(message.content)}</div>`).join('')
-      : '<div class="global-chat-empty">No messages yet.</div>';
-    messagesRoot.scrollTop = messagesRoot.scrollHeight;
-  }
-
-  function normalizeMessage(message) {
-    const currentUserId = window.cryptoAgentCurrentUserId?.() || '';
+  function normalizeConversation(conversation) {
+    if (!conversation?.id) return null;
+    const otherName = conversation.otherName || conversation.otherUser?.displayName || conversation.otherUser?.name || conversation.otherUser?.username || 'Direct chat';
     return {
-      ...message,
-      isOwn: String(message.senderId || '') === String(currentUserId),
+      id: String(conversation.id),
+      otherName,
+      initial: (conversation.initial || otherName.slice(0, 1) || '?').toUpperCase(),
+      unreadCount: Number(conversation.unreadCount || 0),
+      lastMessageId: conversation.lastMessageId || conversation.lastMessage?.id || '',
     };
   }
 
-  function addOrReplaceMessage(message) {
-    if (!message?.id) return;
-    const normalized = normalizeMessage(message);
-    const index = messages.findIndex(item => String(item.id) === String(normalized.id));
-    if (index >= 0) {
-      messages[index] = normalized;
-    } else {
-      messages.push(normalized);
+  function readConversations() {
+    let conversations = [];
+    try {
+      conversations = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch (e) {
+      conversations = [];
     }
-    renderMessages();
+    if (!Array.isArray(conversations)) conversations = [];
+
+    try {
+      const legacy = normalizeConversation(JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || 'null'));
+      if (legacy && !conversations.some(item => String(item.id) === legacy.id)) {
+        conversations.push(legacy);
+        writeConversations(conversations);
+      }
+    } catch (e) {
+      // Ignore bad legacy payloads.
+    }
+
+    return conversations.map(normalizeConversation).filter(Boolean).slice(-6);
   }
 
-  function showBubble() {
-    if (!authenticatedState || !activeConversation?.id || panel.classList.contains('open')) {
-      bubble.classList.remove('open');
-      return;
-    }
-    renderShell();
-    applyPosition();
-    bubble.classList.add('open');
+  function writeConversations(conversations) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations.map(normalizeConversation).filter(Boolean).slice(-6)));
   }
 
-  function hideAll() {
-    bubble.classList.remove('open');
-    panel.classList.remove('open');
-    closeSocket();
+  function upsertStoredConversation(conversation) {
+    const normalized = normalizeConversation(conversation);
+    if (!normalized) return;
+    const conversations = readConversations().filter(item => item.id !== normalized.id);
+    conversations.push(normalized);
+    writeConversations(conversations);
+    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(normalized));
+    clearDismissedConversation(normalized.id);
+  }
+
+  function removeStoredConversation(conversationId) {
+    writeConversations(readConversations().filter(item => item.id !== String(conversationId)));
+    try {
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || 'null');
+      if (String(legacy?.id || '') === String(conversationId)) {
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    } catch (e) {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+  }
+
+  function readDismissedConversations() {
+    try {
+      const value = JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY) || '{}');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function dismissConversation(conversationId, lastMessageId = '') {
+    if (!conversationId || !lastMessageId) return;
+    const dismissed = readDismissedConversations();
+    dismissed[String(conversationId)] = String(lastMessageId);
+    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissed));
+  }
+
+  function clearDismissedConversation(conversationId) {
+    const dismissed = readDismissedConversations();
+    if (!dismissed[String(conversationId)]) return;
+    delete dismissed[String(conversationId)];
+    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(dismissed));
+  }
+
+  function isDismissedConversation(conversationId, lastMessageId = '') {
+    if (!conversationId || !lastMessageId) return false;
+    return readDismissedConversations()[String(conversationId)] === String(lastMessageId);
   }
 
   async function refreshAccessToken() {
@@ -360,176 +378,410 @@
     return res;
   }
 
-  async function loadMessages(silent = false) {
-    if (!activeConversation?.id) return;
-    if (!silent) renderMessages('Loading messages...');
+  function showInAppNotification(title, message) {
+    const text = [title, message].filter(Boolean).join(': ');
+    if (typeof window.showToast === 'function') {
+      window.showToast(text);
+      return;
+    }
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      document.body.appendChild(container);
+    }
+    container.innerHTML = `<div class="toast">${escapeHtml(text)}</div>`;
+    setTimeout(() => { container.innerHTML = ''; }, 3200);
+  }
+
+  function notifyUser({ title = 'Crypto Agent', message = '', tag = '' } = {}) {
+    showInAppNotification(title, message);
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
     try {
-      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/messages`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not load messages');
-      messages = (data.messages || []).map(normalizeMessage);
-      await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/read`, { method: 'POST' }, false);
-      renderMessages();
+      new Notification(title, {
+        body: message,
+        tag: tag || title,
+        icon: '/favicon.ico',
+      });
     } catch (e) {
-      if (!silent) renderMessages(e.message || 'Could not load messages');
+      console.error(e);
     }
   }
 
-  function websocketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.host}${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/ws?token=${encodeURIComponent(accessToken || '')}`;
+  async function requestBrowserNotifications() {
+    if (!('Notification' in window)) {
+      showInAppNotification('Notifications', 'This browser does not support desktop notifications.');
+      return 'unsupported';
+    }
+    const permission = await Notification.requestPermission();
+    showInAppNotification(
+      'Notifications',
+      permission === 'granted' ? 'Browser notifications enabled.' : 'Browser notifications are not enabled.'
+    );
+    return permission;
   }
 
-  async function connectSocket() {
-    if (!activeConversation?.id || !authenticatedState) return;
+  function createChat(conversation) {
+    const normalized = normalizeConversation(conversation);
+    if (!normalized) return null;
+    const existing = chats.get(normalized.id);
+    if (existing) {
+      existing.conversation = normalized;
+      renderShell(existing);
+      return existing;
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'global-chat-bubble open';
+    bubble.innerHTML = `
+      <span class="global-chat-bubble-dot"></span>
+      <span class="global-chat-bubble-label"></span>
+      <span class="global-chat-bubble-count"></span>
+      <button class="global-chat-bubble-close" type="button" title="Close chat">X</button>
+    `;
+
+    const panel = document.createElement('section');
+    panel.className = 'global-chat-panel';
+    panel.setAttribute('aria-label', 'Direct chat');
+    panel.innerHTML = `
+      <div class="global-chat-head">
+        <div class="global-chat-avatar"></div>
+        <div>
+          <div class="global-chat-title"></div>
+          <div class="global-chat-subtitle">Floating chat</div>
+        </div>
+        <div class="global-chat-actions">
+          <button class="global-chat-icon-btn full" type="button" title="Open full chat">F</button>
+          <button class="global-chat-icon-btn min" type="button" title="Minimize">-</button>
+          <button class="global-chat-icon-btn close" type="button" title="Close chat">X</button>
+        </div>
+      </div>
+      <div class="global-chat-messages"><div class="global-chat-empty">Loading messages...</div></div>
+      <div class="global-chat-composer">
+        <input class="global-chat-input" type="text" placeholder="Message..." disabled />
+        <button class="global-chat-send" type="button" disabled>Send</button>
+      </div>
+    `;
+
+    dock.appendChild(bubble);
+    panelsRoot.appendChild(panel);
+
+    const chat = {
+      conversation: normalized,
+      bubble,
+      panel,
+      messagesRoot: panel.querySelector('.global-chat-messages'),
+      input: panel.querySelector('.global-chat-input'),
+      sendBtn: panel.querySelector('.global-chat-send'),
+      messages: [],
+      socket: null,
+      reconnectTimer: null,
+      sending: false,
+    };
+    chats.set(normalized.id, chat);
+
+    bubble.addEventListener('click', () => openPanel(normalized.id));
+    bubble.querySelector('.global-chat-bubble-close').addEventListener('click', event => {
+      event.stopPropagation();
+      closeChat(normalized.id);
+    });
+    panel.querySelector('.min').addEventListener('click', () => minimizePanel(normalized.id));
+    panel.querySelector('.close').addEventListener('click', () => closeChat(normalized.id));
+    panel.querySelector('.full').addEventListener('click', () => {
+      window.location.href = `/friends?conversation=${encodeURIComponent(normalized.id)}`;
+    });
+    chat.sendBtn.addEventListener('click', () => sendMessage(normalized.id));
+    chat.input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        sendMessage(normalized.id);
+      }
+    });
+
+    renderShell(chat);
+    return chat;
+  }
+
+  function renderShell(chat) {
+    const name = chat.conversation.otherName || 'Direct chat';
+    const initial = (chat.conversation.initial || name.slice(0, 1) || '?').toUpperCase();
+    const unread = Number(chat.conversation.unreadCount || 0);
+    const unreadBadge = chat.bubble.querySelector('.global-chat-bubble-count');
+    chat.bubble.querySelector('.global-chat-bubble-dot').textContent = initial;
+    chat.bubble.querySelector('.global-chat-bubble-label').textContent = name;
+    if (unreadBadge) {
+      unreadBadge.textContent = unread > 9 ? '9+' : String(unread);
+      unreadBadge.classList.toggle('visible', unread > 0);
+    }
+    chat.panel.querySelector('.global-chat-avatar').textContent = initial;
+    chat.panel.querySelector('.global-chat-title').textContent = name;
+  }
+
+  function normalizeMessage(message) {
+    const currentUserId = window.cryptoAgentCurrentUserId?.() || '';
+    return { ...message, isOwn: String(message.senderId || '') === String(currentUserId) };
+  }
+
+  function renderMessages(chat, statusText = '') {
+    chat.input.disabled = !authenticatedState || chat.sending;
+    chat.sendBtn.disabled = chat.input.disabled;
+    if (statusText) {
+      chat.messagesRoot.innerHTML = `<div class="global-chat-empty">${escapeHtml(statusText)}</div>`;
+      return;
+    }
+    chat.messagesRoot.innerHTML = chat.messages.length
+      ? chat.messages.map(message => `<div class="global-chat-message ${message.isOwn ? 'own' : ''}">${escapeHtml(message.content)}</div>`).join('')
+      : '<div class="global-chat-empty">No messages yet.</div>';
+    chat.messagesRoot.scrollTop = chat.messagesRoot.scrollHeight;
+  }
+
+  function addOrReplaceMessage(chat, message) {
+    if (!message?.id) return;
+    const normalized = normalizeMessage(message);
+    const index = chat.messages.findIndex(item => String(item.id) === String(normalized.id));
+    if (index >= 0) chat.messages[index] = normalized;
+    else chat.messages.push(normalized);
+    seenLastMessageIds.set(String(chat.conversation.id), String(normalized.id));
+    chat.conversation.lastMessageId = normalized.id;
+    if (!normalized.isOwn) {
+      if (!chat.panel.classList.contains('open') || document.visibilityState !== 'visible') {
+        chat.conversation.unreadCount = Number(chat.conversation.unreadCount || 0) + 1;
+        notifyUser({
+          title: `New message from ${chat.conversation.otherName || 'Direct chat'}`,
+          message: normalized.content || 'New direct message',
+          tag: `direct-message-${chat.conversation.id}`,
+        });
+      }
+      renderShell(chat);
+    }
+    renderMessages(chat);
+  }
+
+  async function loadMessages(chat, silent = false) {
+    if (!silent) renderMessages(chat, 'Loading messages...');
+    try {
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(chat.conversation.id)}/messages`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not load messages');
+      chat.messages = (data.messages || []).map(normalizeMessage);
+      await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(chat.conversation.id)}/read`, { method: 'POST' }, false);
+      chat.conversation.unreadCount = 0;
+      renderShell(chat);
+      renderMessages(chat);
+    } catch (e) {
+      if (!silent) renderMessages(chat, e.message || 'Could not load messages');
+    }
+  }
+
+  function websocketUrl(chat) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}${API_CONVERSATIONS}/${encodeURIComponent(chat.conversation.id)}/ws?token=${encodeURIComponent(accessToken || '')}`;
+  }
+
+  async function connectSocket(chat) {
+    if (!authenticatedState) return;
     if (!accessToken && !await refreshAccessToken()) return;
-    closeSocket(false);
-    socket = new WebSocket(websocketUrl());
-    socket.onmessage = event => {
+    closeSocket(chat, false);
+    chat.socket = new WebSocket(websocketUrl(chat));
+    chat.socket.onmessage = event => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === 'message') addOrReplaceMessage(payload.message);
+        if (payload.type === 'message') addOrReplaceMessage(chat, payload.message);
       } catch (e) {
         console.error(e);
       }
     };
-    socket.onclose = () => {
-      socket = null;
-      if (panel.classList.contains('open') && authenticatedState && activeConversation?.id) {
-        reconnectTimer = setTimeout(connectSocket, 2000);
+    chat.socket.onclose = () => {
+      chat.socket = null;
+      if (chat.panel.classList.contains('open') && authenticatedState) {
+        chat.reconnectTimer = setTimeout(() => connectSocket(chat), 2000);
       }
     };
   }
 
-  function closeSocket(clearReconnect = true) {
-    if (clearReconnect && reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
+  function closeSocket(chat, clearReconnect = true) {
+    if (clearReconnect && chat.reconnectTimer) {
+      clearTimeout(chat.reconnectTimer);
+      chat.reconnectTimer = null;
     }
-    if (socket) {
-      socket.onclose = null;
-      socket.close();
-      socket = null;
+    if (chat.socket) {
+      chat.socket.onclose = null;
+      chat.socket.close();
+      chat.socket = null;
     }
   }
 
-  async function sendMessage() {
-    const content = input.value.trim();
-    if (!activeConversation?.id || !content || sending) return;
-    input.value = '';
-    sending = true;
-    renderMessages();
+  async function sendMessage(conversationId) {
+    const chat = chats.get(String(conversationId));
+    if (!chat) return;
+    const content = chat.input.value.trim();
+    if (!content || chat.sending) return;
+    chat.input.value = '';
+    chat.sending = true;
+    renderMessages(chat);
+    let failed = false;
     try {
-      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/messages`, {
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(chat.conversation.id)}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not send message');
-      addOrReplaceMessage(data.message);
+      addOrReplaceMessage(chat, data.message);
     } catch (e) {
-      renderMessages(e.message || 'Could not send message');
-      sending = false;
-      input.focus();
-      return;
+      failed = true;
+      renderMessages(chat, e.message || 'Could not send message');
     } finally {
-      sending = false;
+      chat.sending = false;
+      if (!failed) renderMessages(chat);
+      chat.input.focus();
     }
-    renderMessages();
-    input.focus();
   }
 
-  async function openPanel() {
-    if (!activeConversation?.id || !authenticatedState) return;
-    renderShell();
-    bubble.classList.remove('open');
-    panel.classList.add('open');
-    await loadMessages(false);
-    await connectSocket();
-    input.focus();
+  async function openPanel(conversationId) {
+    const chat = chats.get(String(conversationId));
+    if (!chat || !authenticatedState) return;
+    chat.bubble.classList.remove('open');
+    chat.panel.classList.add('open');
+    clearDismissedConversation(chat.conversation.id);
+    await loadMessages(chat, false);
+    await connectSocket(chat);
+    chat.input.focus();
   }
 
-  function minimizePanel() {
-    panel.classList.remove('open');
-    closeSocket();
-    showBubble();
+  function minimizePanel(conversationId) {
+    const chat = chats.get(String(conversationId));
+    if (!chat) return;
+    chat.panel.classList.remove('open');
+    closeSocket(chat);
+    chat.bubble.classList.add('open');
   }
 
-  function openFullChat() {
-    const suffix = activeConversation?.id ? `?conversation=${encodeURIComponent(activeConversation.id)}` : '';
-    window.location.href = `/friends${suffix}`;
+  function closeChat(conversationId) {
+    const id = String(conversationId);
+    const chat = chats.get(id);
+    if (!chat) return;
+    closeSocket(chat);
+    dismissConversation(id, chat.conversation.lastMessageId);
+    chat.bubble.remove();
+    chat.panel.remove();
+    chats.delete(id);
+    removeStoredConversation(id);
+  }
+
+  function conversationMessagePreview(conversation) {
+    return conversation.lastMessage?.content || 'New direct message';
+  }
+
+  function applyConversationNotifications(conversations, initial = false) {
+    for (const conversation of conversations || []) {
+      const conversationId = String(conversation.id || '');
+      if (!conversationId) continue;
+
+      const normalized = normalizeConversation(conversation);
+      const unreadCount = Number(conversation.unreadCount || 0);
+      const lastMessage = conversation.lastMessage || null;
+      const lastMessageId = lastMessage?.id ? String(lastMessage.id) : '';
+      const dismissed = isDismissedConversation(conversationId, lastMessageId);
+      if (normalized && unreadCount > 0) {
+        normalized.unreadCount = unreadCount;
+        normalized.lastMessageId = lastMessageId;
+        if (!dismissed) {
+          upsertStoredConversation(normalized);
+          const chat = createChat(normalized);
+          if (chat && !chat.panel.classList.contains('open')) {
+            chat.conversation.unreadCount = unreadCount;
+            chat.conversation.lastMessageId = lastMessageId;
+            renderShell(chat);
+            chat.bubble.classList.add('open');
+          }
+        }
+      }
+
+      if (!lastMessage?.id) continue;
+      const previousId = seenLastMessageIds.get(conversationId);
+      seenLastMessageIds.set(conversationId, lastMessageId);
+      if (initial || dismissed || previousId === lastMessageId || lastMessage.isOwn || unreadCount < 1) continue;
+
+      notifyUser({
+        title: `New message from ${normalized?.otherName || 'Direct chat'}`,
+        message: conversationMessagePreview(conversation),
+        tag: `direct-message-${conversationId}`,
+      });
+    }
+  }
+
+  async function pollConversationNotifications(initial = false) {
+    if (!authenticatedState) return;
+    try {
+      const res = await authFetch(API_CONVERSATIONS);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not load conversations');
+      applyConversationNotifications(data.conversations || [], initial);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function startConversationPolling() {
+    if (conversationPoll || !authenticatedState) return;
+    pollConversationNotifications(true);
+    conversationPoll = setInterval(() => pollConversationNotifications(false), CONVERSATION_POLL_MS);
+  }
+
+  function stopConversationPolling() {
+    if (conversationPoll) clearInterval(conversationPoll);
+    conversationPoll = null;
+    seenLastMessageIds.clear();
   }
 
   function sync(authenticated) {
     authenticatedState = !!authenticated;
-    activeConversation = readConversation();
-    if (!authenticatedState || !activeConversation?.id) {
-      hideAll();
+    if (!authenticatedState) {
+      stopConversationPolling();
+      for (const chat of chats.values()) closeSocket(chat);
+      dock.innerHTML = '';
+      panelsRoot.innerHTML = '';
+      chats.clear();
       return;
     }
-    renderShell();
-    if (panel.classList.contains('open')) {
-      return;
+
+    const conversations = readConversations();
+    const keepIds = new Set(conversations.map(item => item.id));
+    for (const conversation of conversations) {
+      createChat(conversation);
     }
-    showBubble();
+    for (const [id, chat] of chats.entries()) {
+      if (!keepIds.has(id)) closeChat(id);
+      else if (!chat.panel.classList.contains('open')) chat.bubble.classList.add('open');
+    }
+    startConversationPolling();
   }
 
-  bubble.addEventListener('click', () => {
-    if (suppressClick) {
-      suppressClick = false;
-      return;
-    }
-    openPanel();
-  });
-
-  minBtn.addEventListener('click', minimizePanel);
-  fullBtn.addEventListener('click', openFullChat);
-  sendBtn.addEventListener('click', sendMessage);
-  input.addEventListener('keydown', event => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      sendMessage();
-    }
-  });
-
-  bubble.addEventListener('pointerdown', event => {
-    const rect = bubble.getBoundingClientRect();
-    drag = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      moved: false,
-    };
-    bubble.setPointerCapture?.(event.pointerId);
-  });
-
-  window.addEventListener('pointermove', event => {
-    if (!drag) return;
-    drag.moved = true;
-    const x = Math.max(8, Math.min(window.innerWidth - bubble.offsetWidth - 8, event.clientX - drag.offsetX));
-    const y = Math.max(8, Math.min(window.innerHeight - bubble.offsetHeight - 8, event.clientY - drag.offsetY));
-    bubble.style.left = `${x}px`;
-    bubble.style.top = `${y}px`;
-    bubble.style.right = 'auto';
-    bubble.style.bottom = 'auto';
-    writePosition({ x, y });
-  });
-
-  window.addEventListener('pointerup', event => {
-    if (!drag) return;
-    suppressClick = drag.moved;
-    bubble.releasePointerCapture?.(event.pointerId);
-    drag = null;
-  });
-
   window.addEventListener('storage', event => {
-    if (event.key === STORAGE_KEY || event.key === POSITION_KEY) {
+    if ([STORAGE_KEY, LEGACY_STORAGE_KEY].includes(event.key)) {
       sync(window.cryptoAgentIsAuthenticated?.() || false);
     }
   });
 
-  window.cryptoAgentGlobalChatBubble = { sync, open: openPanel, minimize: minimizePanel };
+  window.cryptoAgentGlobalChatBubble = {
+    sync,
+    addConversation(conversation) {
+      upsertStoredConversation(conversation);
+      sync(window.cryptoAgentIsAuthenticated?.() || false);
+    },
+    open(conversationId) {
+      openPanel(conversationId || readConversations().at(-1)?.id);
+    },
+    minimize(conversationId) {
+      minimizePanel(conversationId || readConversations().at(-1)?.id);
+    },
+    close: closeChat,
+  };
+  window.cryptoAgentNotify = notifyUser;
+  window.cryptoAgentRequestNotifications = requestBrowserNotifications;
+
   setTimeout(() => sync(window.cryptoAgentIsAuthenticated?.() || false), 0);
 })();
 </script>

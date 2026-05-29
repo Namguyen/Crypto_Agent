@@ -328,7 +328,93 @@ def price_sidebar_data() -> list[dict]:
     return list(latest.values())
 
 
-def fetch_market_prices(coin_ids: list[str]) -> dict:
+MARKET_SYMBOLS = {
+    "bitcoin": "BTC",
+    "ethereum": "ETH",
+    "solana": "SOL",
+    "ripple": "XRP",
+    "binancecoin": "BNB",
+    "cardano": "ADA",
+    "avalanche-2": "AVAX",
+    "dogecoin": "DOGE",
+    "chainlink": "LINK",
+    "polkadot": "DOT",
+    "litecoin": "LTC",
+}
+
+BINANCE_USDT_PAIRS = {coin_id: f"{symbol}USDT" for coin_id, symbol in MARKET_SYMBOLS.items()}
+COINBASE_USD_PRODUCTS = {
+    coin_id: f"{symbol}-USD"
+    for coin_id, symbol in MARKET_SYMBOLS.items()
+    if symbol not in {"BNB"}
+}
+MARKET_REQUEST_HEADERS = {"User-Agent": "Crypto-Agent/1.0"}
+
+
+def compact_coin_ids(coin_ids: list[str]) -> list[str]:
+    return list(dict.fromkeys(coin_id for coin_id in coin_ids if coin_id))
+
+
+def normalized_market_price(price: str | float | int, change: str | float | int, source: str) -> dict:
+    return {
+        "usd": float(price),
+        "usd_24h_change": float(change),
+        "source": source,
+    }
+
+
+def fetch_binance_market_prices(coin_ids: list[str], *, base_url: str, source: str) -> dict:
+    pairs = {
+        coin_id: BINANCE_USDT_PAIRS[coin_id]
+        for coin_id in coin_ids
+        if coin_id in BINANCE_USDT_PAIRS
+    }
+    if not pairs:
+        return {}
+
+    response = requests.get(
+        f"{base_url.rstrip('/')}/api/v3/ticker/24hr",
+        params={"symbols": json.dumps(list(pairs.values()), separators=(",", ":"))},
+        headers=MARKET_REQUEST_HEADERS,
+        timeout=6,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    rows = payload if isinstance(payload, list) else [payload]
+    by_symbol = {row.get("symbol"): row for row in rows if isinstance(row, dict)}
+
+    prices = {}
+    for coin_id, symbol in pairs.items():
+        row = by_symbol.get(symbol)
+        if not row or row.get("lastPrice") is None or row.get("priceChangePercent") is None:
+            continue
+        prices[coin_id] = normalized_market_price(row["lastPrice"], row["priceChangePercent"], source)
+    return prices
+
+
+def fetch_coinbase_market_prices(coin_ids: list[str]) -> dict:
+    prices = {}
+    for coin_id in coin_ids:
+        product = COINBASE_USD_PRODUCTS.get(coin_id)
+        if not product:
+            continue
+        response = requests.get(
+            f"https://api.exchange.coinbase.com/products/{product}/stats",
+            headers=MARKET_REQUEST_HEADERS,
+            timeout=6,
+        )
+        response.raise_for_status()
+        row = response.json()
+        last = float(row["last"])
+        open_price = float(row["open"])
+        if open_price == 0:
+            continue
+        change = ((last - open_price) / open_price) * 100
+        prices[coin_id] = normalized_market_price(last, change, "coinbase")
+    return prices
+
+
+def fetch_coingecko_market_prices(coin_ids: list[str]) -> dict:
     if not coin_ids:
         return {}
     response = requests.get(
@@ -338,10 +424,44 @@ def fetch_market_prices(coin_ids: list[str]) -> dict:
             "vs_currencies": "usd",
             "include_24hr_change": "true",
         },
+        headers=MARKET_REQUEST_HEADERS,
         timeout=8,
     )
     response.raise_for_status()
-    return response.json()
+    prices = {}
+    for coin_id, row in response.json().items():
+        if row.get("usd") is None or row.get("usd_24h_change") is None:
+            continue
+        prices[coin_id] = normalized_market_price(row["usd"], row["usd_24h_change"], "coingecko")
+    return prices
+
+
+def fetch_market_prices(coin_ids: list[str]) -> dict:
+    wanted = compact_coin_ids(coin_ids)
+    if not wanted:
+        return {}
+
+    prices = {}
+    errors = []
+    providers = [
+        lambda ids: fetch_binance_market_prices(ids, base_url="https://api.binance.com", source="binance"),
+        lambda ids: fetch_binance_market_prices(ids, base_url="https://api.binance.us", source="binance-us"),
+        fetch_coinbase_market_prices,
+        fetch_coingecko_market_prices,
+    ]
+
+    for provider in providers:
+        missing = [coin_id for coin_id in wanted if coin_id not in prices]
+        if not missing:
+            break
+        try:
+            prices.update(provider(missing))
+        except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+            errors.append(str(exc))
+
+    if not prices and errors:
+        raise requests.RequestException("Market price providers failed: " + " | ".join(errors))
+    return prices
 
 
 def notification_payload(user_id: int | str, created: Optional[list[dict]] = None) -> dict:
@@ -380,9 +500,10 @@ def check_price_notifications_for_user(user: dict) -> list[dict]:
 
         direction = "rose" if change > 0 else "dropped"
         title = f"{setting['symbol']} Price Alert"
+        source = coin.get("source") or "market data"
         message = (
             f"{setting['symbol']} {direction} {abs(float(change)):.2f}% in 24h. "
-            f"Current price: ${float(price):,.2f}."
+            f"Current price: ${float(price):,.2f}. Source: {source}."
         )
         created.append(
             create_notification_event(
@@ -590,6 +711,11 @@ def friends_page(request: Request):
 @app.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request):
     return templates.TemplateResponse(request, "profile.html")
+
+
+@app.get("/profiles/{user_ref}", response_class=HTMLResponse)
+def public_profile_page(request: Request, user_ref: str):
+    return templates.TemplateResponse(request, "profile.html", {"profile_ref": user_ref})
 
 
 @app.get("/login", response_class=HTMLResponse)

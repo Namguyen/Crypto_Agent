@@ -9,11 +9,29 @@
       color-scheme: dark;
       --bg: #090b10;
       --panel: #10141d;
+      --soft: #151a24;
+      --input: #080b10;
+      --item: #0c1018;
+      --message: #171d28;
       --line: #222936;
       --text: #e8edf6;
       --muted: #8c96a8;
       --accent: #ef9f27;
       --green: #41d08f;
+    }
+    body[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --soft: #f0f3f9;
+      --input: #f9fbff;
+      --item: #ffffff;
+      --message: #eef2f8;
+      --line: #dbe2ee;
+      --text: #172033;
+      --muted: #697589;
+      --accent: #7c3aed;
+      --green: #178c4f;
     }
     * { box-sizing: border-box; }
     body {
@@ -40,7 +58,7 @@
       align-items: center;
       justify-content: center;
       border: 1px solid var(--line);
-      background: #151a24;
+      background: var(--soft);
       color: var(--text);
       min-height: 34px;
       padding: 0 12px;
@@ -80,7 +98,7 @@
       width: 100%;
       min-height: 36px;
       border: 1px solid var(--line);
-      background: #080b10;
+      background: var(--input);
       color: var(--text);
       border-radius: 5px;
       padding: 0 10px;
@@ -93,12 +111,14 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      border: 1px solid #1b2230;
-      background: #0c1018;
+      border: 1px solid var(--line);
+      background: var(--item);
       border-radius: 6px;
       padding: 10px;
     }
     .name { font-size: 13px; font-weight: 800; }
+    .profile-link { color: var(--text); text-decoration: none; }
+    .profile-link:hover { color: var(--accent); }
     .meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .empty { color: var(--muted); font-size: 12px; padding: 10px; border: 1px dashed #283140; border-radius: 6px; }
@@ -120,8 +140,8 @@
       max-width: 72%;
       padding: 10px 12px;
       border-radius: 8px;
-      background: #171d28;
-      border: 1px solid #242c3a;
+      background: var(--message);
+      border: 1px solid var(--line);
       font-size: 13px;
       line-height: 1.45;
     }
@@ -138,7 +158,7 @@
       background: #15100a;
       color: var(--accent);
       border-radius: 999px;
-      padding: 8px 12px;
+      padding: 8px 10px 8px 12px;
       cursor: grab;
       z-index: 50;
       user-select: none;
@@ -154,6 +174,18 @@
       background: var(--accent);
       color: #111;
       font-weight: 900;
+    }
+    .direct-chat-bubble-close {
+      width: 22px;
+      height: 22px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      font: inherit;
+      line-height: 1;
+      padding: 0;
     }
     .toast {
       position: fixed;
@@ -176,6 +208,7 @@
   </style>
 </head>
 <body>
+  <script>document.body.dataset.theme = localStorage.getItem('cryptoAgentTheme') || 'dark';</script>
   <main class="shell">
     <header class="top">
       <div>
@@ -233,6 +266,7 @@
   <div class="direct-chat-bubble" id="directChatBubble" onclick="restoreDirectChat()" onpointerdown="startDirectChatBubbleDrag(event)">
     <span class="bubble-dot" id="directChatBubbleInitial">?</span>
     <span id="directChatBubbleLabel">Direct chat</span>
+    <button class="direct-chat-bubble-close" type="button" title="Close chat" onclick="closeDirectChatBubble(event)" onpointerdown="event.stopPropagation()">X</button>
   </div>
   <div id="toastContainer"></div>
 
@@ -246,6 +280,7 @@
     const API_CONVERSATIONS = '/api/conversations';
     const AUTH_LOGIN = '/login';
     const DIRECT_CHAT_STORAGE_KEY = 'cryptoAgentDirectConversation';
+    const DIRECT_CHAT_LIST_STORAGE_KEY = 'cryptoAgentDirectConversations';
 
     let accessToken = null;
     let authState = { authenticated: false, user: null };
@@ -256,6 +291,8 @@
     let suppressBubbleClick = false;
     let directChatSocket = null;
     let directChatReconnectTimer = null;
+    let conversationNotificationPoll = null;
+    const conversationNotificationSeen = new Map();
 
     function escapeHtml(value) {
       return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -267,20 +304,64 @@
       document.getElementById('toastContainer').innerHTML = `<div class="toast">${escapeHtml(message)}</div>`;
       setTimeout(() => { document.getElementById('toastContainer').innerHTML = ''; }, 2200);
     }
+    function notifyUser(title, message, tag = '') {
+      showToast([title, message].filter(Boolean).join(': '));
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      try {
+        new Notification(title, { body: message, tag: tag || title, icon: '/favicon.ico' });
+      } catch (e) {
+        console.error(e);
+      }
+    }
     function userLabel(user) {
       return user?.displayName || user?.name || user?.username || 'Unknown';
     }
     function saveDirectConversation(conversation) {
       if (!conversation?.id) return;
       const otherName = userLabel(conversation.otherUser);
-      localStorage.setItem(DIRECT_CHAT_STORAGE_KEY, JSON.stringify({
+      const payload = {
         id: conversation.id,
         otherName,
         initial: otherName.slice(0, 1).toUpperCase(),
-      }));
+      };
+      localStorage.setItem(DIRECT_CHAT_STORAGE_KEY, JSON.stringify(payload));
+      let conversations = [];
+      try {
+        conversations = JSON.parse(localStorage.getItem(DIRECT_CHAT_LIST_STORAGE_KEY) || '[]');
+      } catch (e) {
+        conversations = [];
+      }
+      if (!Array.isArray(conversations)) conversations = [];
+      conversations = conversations.filter(item => String(item.id) !== String(payload.id));
+      conversations.push(payload);
+      localStorage.setItem(DIRECT_CHAT_LIST_STORAGE_KEY, JSON.stringify(conversations.slice(-6)));
+      window.cryptoAgentGlobalChatBubble?.addConversation(payload);
+    }
+    function removeDirectConversation(conversationId) {
+      const id = String(conversationId || '');
+      if (!id) return;
+      try {
+        const legacy = JSON.parse(localStorage.getItem(DIRECT_CHAT_STORAGE_KEY) || 'null');
+        if (String(legacy?.id || '') === id) localStorage.removeItem(DIRECT_CHAT_STORAGE_KEY);
+      } catch (e) {
+        localStorage.removeItem(DIRECT_CHAT_STORAGE_KEY);
+      }
+      try {
+        const conversations = JSON.parse(localStorage.getItem(DIRECT_CHAT_LIST_STORAGE_KEY) || '[]');
+        if (Array.isArray(conversations)) {
+          localStorage.setItem(DIRECT_CHAT_LIST_STORAGE_KEY, JSON.stringify(conversations.filter(item => String(item.id) !== id)));
+        }
+      } catch (e) {
+        localStorage.removeItem(DIRECT_CHAT_LIST_STORAGE_KEY);
+      }
+      window.cryptoAgentGlobalChatBubble?.close(id);
     }
     function storedConversationId() {
       try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('conversation')) return params.get('conversation');
+        const conversations = JSON.parse(localStorage.getItem(DIRECT_CHAT_LIST_STORAGE_KEY) || '[]');
+        if (Array.isArray(conversations) && conversations.length) return conversations[conversations.length - 1]?.id || '';
         return JSON.parse(localStorage.getItem(DIRECT_CHAT_STORAGE_KEY) || 'null')?.id || '';
       } catch (e) {
         return '';
@@ -300,6 +381,12 @@
         directChatState.messages[index] = normalized;
       } else {
         directChatState.messages.push(normalized);
+      }
+      if (directChatState.conversation?.id) {
+        conversationNotificationSeen.set(String(directChatState.conversation.id), String(normalized.id));
+      }
+      if (!normalized.isOwn) {
+        notifyUser(`New message from ${userLabel(directChatState.conversation?.otherUser)}`, normalized.content, `direct-message-${directChatState.conversation?.id || normalized.id}`);
       }
       renderDirectChat();
     }
@@ -359,6 +446,43 @@
       }
       return res;
     }
+    function applyConversationNotifications(conversations, initial = false) {
+      (conversations || []).forEach(conversation => {
+        const conversationId = String(conversation.id || '');
+        const lastMessage = conversation.lastMessage || null;
+        if (!conversationId || !lastMessage?.id) return;
+        const lastMessageId = String(lastMessage.id);
+        const previousId = conversationNotificationSeen.get(conversationId);
+        conversationNotificationSeen.set(conversationId, lastMessageId);
+        if (initial || previousId === lastMessageId || lastMessage.isOwn || Number(conversation.unreadCount || 0) < 1) return;
+        notifyUser(
+          `New message from ${userLabel(conversation.otherUser)}`,
+          lastMessage.content || 'New direct message',
+          `direct-message-${conversationId}`
+        );
+      });
+    }
+    async function pollConversationNotifications(initial = false) {
+      if (!authState.authenticated) return;
+      try {
+        const res = await authFetch(API_CONVERSATIONS);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not load conversations');
+        applyConversationNotifications(data.conversations || [], initial);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    function startConversationNotifications() {
+      if (conversationNotificationPoll || !authState.authenticated) return;
+      pollConversationNotifications(true);
+      conversationNotificationPoll = setInterval(() => pollConversationNotifications(false), 15000);
+    }
+    function stopConversationNotifications() {
+      if (conversationNotificationPoll) clearInterval(conversationNotificationPoll);
+      conversationNotificationPoll = null;
+      conversationNotificationSeen.clear();
+    }
     async function loadAuth() {
       try {
         await refreshAccessToken();
@@ -372,6 +496,7 @@
       renderAuth();
       await loadFriends();
       await restoreRequestedConversation();
+      if (authState.authenticated) startConversationNotifications();
     }
     function renderAuth() {
       const name = document.getElementById('authName');
@@ -396,12 +521,15 @@
       friendState = { friends: [], sent: [], received: [], searchResults: [] };
       directChatState = { conversation: null, messages: [] };
       localStorage.removeItem(DIRECT_CHAT_STORAGE_KEY);
+      localStorage.removeItem(DIRECT_CHAT_LIST_STORAGE_KEY);
       closeDirectChatSocket();
+      stopConversationNotifications();
       renderAuth();
       renderFriends();
     }
     function item(user, actionHtml = '', meta = '') {
-      return `<div class="item"><div><div class="name">${escapeHtml(userLabel(user))}</div><div class="meta">${escapeHtml(meta || `@${user.username || user.id}`)}</div></div>${actionHtml ? `<div class="actions">${actionHtml}</div>` : ''}</div>`;
+      const ref = encodeURIComponent(user.username || user.id);
+      return `<div class="item"><div><div class="name"><a class="profile-link" href="/profiles/${ref}">${escapeHtml(userLabel(user))}</a></div><div class="meta">${escapeHtml(meta || `@${user.username || user.id}`)}</div></div>${actionHtml ? `<div class="actions">${actionHtml}</div>` : ''}</div>`;
     }
     function renderFriends() {
       const results = document.getElementById('friendSearchResults');
@@ -414,7 +542,7 @@
         return;
       }
       results.innerHTML = friendState.searchResults.length
-        ? friendState.searchResults.map(user => item(user, `<button type="button" onclick="sendFriendRequest('${escapeJS(user.id)}')">Add</button>`)).join('')
+        ? friendState.searchResults.map(user => item(user, `<a class="btn" href="/profiles/${encodeURIComponent(user.username || user.id)}">View</a><button type="button" onclick="sendFriendRequest('${escapeJS(user.id)}')">Add</button>`)).join('')
         : '<div class="empty">Search by username to add a friend.</div>';
       received.innerHTML = friendState.received.length
         ? friendState.received.map(req => item(req.from, `<button type="button" onclick="acceptFriendRequest('${escapeJS(req.id)}')">Accept</button><button type="button" onclick="declineFriendRequest('${escapeJS(req.id)}')">Decline</button>`, req.message || 'Wants to connect')).join('')
@@ -633,6 +761,11 @@
       }
       document.getElementById('directChatBubble').classList.remove('open');
       document.getElementById('directChatInput').focus();
+    }
+    function closeDirectChatBubble(event) {
+      event?.stopPropagation();
+      document.getElementById('directChatBubble').classList.remove('open');
+      removeDirectConversation(directChatState.conversation?.id);
     }
     function startDirectChatBubbleDrag(event) {
       const bubble = document.getElementById('directChatBubble');

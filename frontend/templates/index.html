@@ -308,6 +308,13 @@
       font-weight: 700;
       letter-spacing: .1em;
     }
+    .notif-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .notif-action {
       background: none;
       border: none;
@@ -1296,7 +1303,11 @@
         <div class="notif-panel" id="notifPanel">
           <div class="notif-head">
             <span class="notif-title">PRICE ALERTS</span>
-            <button class="notif-action" type="button" onclick="markNotificationsRead()">MARK READ</button>
+            <div class="notif-actions">
+              <button class="notif-action" type="button" onclick="checkNotificationsNow()">CHECK NOW</button>
+              <button class="notif-action" type="button" onclick="requestBrowserNotifications()">BROWSER</button>
+              <button class="notif-action" type="button" onclick="markNotificationsRead()">MARK READ</button>
+            </div>
           </div>
           <div class="notif-list" id="notifList">
             <div class="notif-empty">Login to view price alerts.</div>
@@ -2057,13 +2068,43 @@ async function declineFriendRequest(requestId) {
   }
 }
 
-function applyNotificationPayload(data) {
+function notifyUser(title, message, tag = '') {
+  if (window.cryptoAgentNotify) {
+    window.cryptoAgentNotify({ title, message, tag });
+    return;
+  }
+  showToast([title, message].filter(Boolean).join(': '));
+}
+
+async function requestBrowserNotifications() {
+  if (window.cryptoAgentRequestNotifications) {
+    await window.cryptoAgentRequestNotifications();
+    return;
+  }
+  if (!('Notification' in window)) {
+    showToast('Browser notifications are not supported');
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  showToast(permission === 'granted' ? 'Browser notifications enabled' : 'Browser notifications not enabled');
+}
+
+function notifyCreatedPriceAlerts(events) {
+  (events || []).forEach(event => {
+    notifyUser(event.title || 'Price alert', event.message || 'Market alert triggered', `price-alert-${event.id || event.symbol}`);
+  });
+}
+
+function applyNotificationPayload(data, options = {}) {
   notificationState = {
     events: data.events || [],
     settings: data.settings || [],
     unreadCount: data.unreadCount || 0,
   };
   renderNotifications();
+  if (options.notifyCreated) {
+    notifyCreatedPriceAlerts(data.created || []);
+  }
 }
 
 async function loadNotifications(check = false) {
@@ -2079,7 +2120,7 @@ async function loadNotifications(check = false) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load notifications');
-    applyNotificationPayload(data);
+    applyNotificationPayload(data, { notifyCreated: check });
   } catch (e) {
     console.error(e);
   }
@@ -2412,6 +2453,10 @@ function toggleNotebook() {
   syncRootWidth();
 }
 
+async function checkNotificationsNow() {
+  await loadNotifications(true);
+}
+
 function userInitial(user) {
   const value = (user?.displayName || user?.name || user?.username || '?').trim();
   return value ? value[0].toUpperCase() : '?';
@@ -2519,7 +2564,7 @@ async function saveProfile() {
 // Simple Toast Notification
 function showToast(msg) {
   const container = document.getElementById('toastContainer');
-  container.innerHTML = `<div class="toast">${msg.toUpperCase()}</div>`;
+  container.innerHTML = `<div class="toast">${escape(String(msg).toUpperCase())}</div>`;
 }
 
 function applyAuthPayload(data) {

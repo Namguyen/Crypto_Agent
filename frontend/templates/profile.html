@@ -9,12 +9,28 @@
       color-scheme: dark;
       --bg: #090b10;
       --panel: #10141d;
+      --soft: #151a24;
       --line: #222936;
       --text: #e8edf6;
       --muted: #8c96a8;
       --accent: #ef9f27;
+      --accent-2: #cf4bd8;
+      --input: #080b10;
+    }
+    body[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --soft: #f0f3f9;
+      --line: #dbe2ee;
+      --text: #172033;
+      --muted: #697589;
+      --accent: #7c3aed;
+      --accent-2: #ec4899;
+      --input: #f9fbff;
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
       margin: 0;
       min-height: 100vh;
@@ -23,7 +39,7 @@
       color: var(--text);
     }
     a { color: inherit; text-decoration: none; }
-    .shell { max-width: 920px; margin: 0 auto; padding: 18px; }
+    .shell { max-width: 940px; margin: 0 auto; padding: 18px; }
     .top {
       display: flex;
       justify-content: space-between;
@@ -32,40 +48,45 @@
       padding: 12px 0 18px;
       border-bottom: 1px solid var(--line);
     }
-    .brand { font-size: 13px; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
-    .nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .brand { font-size: 13px; font-weight: 900; letter-spacing: .08em; color: var(--accent); }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .nav, .actions, .profile-actions, .theme-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .btn, button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       border: 1px solid var(--line);
-      background: #151a24;
+      background: var(--soft);
       color: var(--text);
       min-height: 34px;
       padding: 0 12px;
-      border-radius: 5px;
-      font-size: 11px;
+      border-radius: 7px;
+      font-size: 12px;
       font-weight: 800;
-      letter-spacing: .04em;
       cursor: pointer;
     }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #111; }
+    button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #111; }
     button:disabled, input:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
-    .profile {
+    .card {
       margin-top: 18px;
       border: 1px solid var(--line);
       background: var(--panel);
       border-radius: 8px;
       overflow: hidden;
+      box-shadow: 0 18px 45px rgba(0,0,0,.18);
     }
-    .profile-head {
+    .cover {
+      position: relative;
+      min-height: 156px;
       display: grid;
-      grid-template-columns: 96px minmax(0, 1fr);
+      grid-template-columns: 88px minmax(0, 1fr) auto;
       gap: 16px;
       align-items: center;
-      padding: 18px;
-      border-bottom: 1px solid var(--line);
+      padding: 22px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6 45%, var(--accent-2));
+      color: #fff;
     }
+    .avatar-wrap { position: relative; width: 84px; height: 84px; }
     .avatar {
       width: 84px;
       height: 84px;
@@ -73,54 +94,131 @@
       display: grid;
       place-items: center;
       overflow: hidden;
-      background: #1a2130;
-      border: 1px solid #30394a;
-      color: var(--accent);
+      background: rgba(0,0,0,.24);
+      border: 3px solid rgba(255,255,255,.8);
+      color: #fff;
       font-size: 30px;
       font-weight: 900;
     }
     .avatar img { width: 100%; height: 100%; object-fit: cover; }
-    .name { font-size: 22px; font-weight: 900; line-height: 1.2; }
-    .username { color: var(--muted); font-size: 13px; margin-top: 5px; }
-    .bio { color: #c9d1df; font-size: 14px; line-height: 1.5; margin-top: 10px; white-space: pre-wrap; }
-    .form {
-      padding: 18px;
+    .camera {
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      background: var(--accent);
+      color: #111;
+      padding: 0;
+      min-height: 0;
+    }
+    .name { font-size: 24px; font-weight: 900; line-height: 1.15; }
+    .username { color: rgba(255,255,255,.9); font-size: 14px; margin-top: 5px; }
+    .bio { color: rgba(255,255,255,.86); font-size: 13px; line-height: 1.45; margin-top: 8px; white-space: pre-wrap; }
+    .status {
+      align-self: start;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.9);
+      color: #178c4f;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+    .profile-actions {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      justify-content: flex-end;
+    }
+    .tabs {
       display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 12px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      border-radius: 999px;
+      min-height: 34px;
+      background: var(--soft);
+      color: var(--muted);
+    }
+    .tab.active {
+      background: #fff;
+      color: #151827;
+      border-color: transparent;
+      box-shadow: 0 6px 18px rgba(0,0,0,.12);
+    }
+    body[data-theme="light"] .tab.active {
+      background: #111827;
+      color: #fff;
+    }
+    .panel-body { padding: 18px; }
+    .form { display: grid; gap: 14px; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
     .field { display: grid; gap: 7px; }
-    label { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+    label { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
     input, textarea {
       width: 100%;
       border: 1px solid var(--line);
-      background: #080b10;
+      background: var(--input);
       color: var(--text);
-      border-radius: 5px;
+      border-radius: 7px;
       padding: 10px;
       outline: none;
       font: inherit;
     }
-    textarea { min-height: 110px; resize: vertical; line-height: 1.45; }
+    textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
     input:focus, textarea:focus { border-color: var(--accent); }
-    .actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-    .hint { color: var(--muted); font-size: 12px; }
+    .theme-option.active { background: var(--accent); border-color: var(--accent); color: #111; }
+    .note {
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
     .toast {
       position: fixed;
       top: 18px;
       left: 50%;
       transform: translateX(-50%);
       border: 1px solid var(--accent);
-      background: #10141d;
+      background: var(--panel);
       color: var(--accent);
       padding: 9px 14px;
-      border-radius: 5px;
+      border-radius: 6px;
       font-size: 12px;
       z-index: 100;
     }
-    @media (max-width: 620px) {
-      .profile-head { grid-template-columns: 1fr; }
+    @media (max-width: 700px) {
+      .cover { grid-template-columns: 1fr; }
+      .status { justify-self: start; }
+      .form-grid, .tabs { grid-template-columns: 1fr; }
     }
   </style>
+  <script>
+    const savedTheme = localStorage.getItem('cryptoAgentTheme') || 'dark';
+    document.addEventListener('DOMContentLoaded', () => document.body.dataset.theme = savedTheme);
+  </script>
 </head>
 <body>
   <main class="shell">
@@ -136,38 +234,93 @@
       </nav>
     </header>
 
-    <section class="profile">
-      <div class="profile-head">
-        <div class="avatar" id="profileAvatarPreview">?</div>
+    <section class="card">
+      <div class="cover">
+        <div class="avatar-wrap">
+          <div class="avatar" id="profileAvatarPreview">?</div>
+          {% if not profile_ref %}
+          <button class="camera" id="avatarCameraBtn" type="button" onclick="selectProfilePicture()" title="Upload picture">C</button>
+          {% endif %}
+        </div>
         <div>
           <div class="name" id="profileNamePreview">Guest</div>
-          <div class="username" id="profileUsernamePreview">Login to edit your profile</div>
+          <div class="username" id="profileUsernamePreview">Login to view profiles</div>
           <div class="bio" id="profileBioPreview"></div>
         </div>
+        <div class="status">Online</div>
       </div>
-      <form class="form" id="profileForm" onsubmit="saveProfile(event)">
-        <div class="field">
-          <label for="profileDisplayName">DISPLAY NAME</label>
-          <input id="profileDisplayName" name="displayName" autocomplete="name" />
-        </div>
-        <div class="field">
-          <label for="profileBio">BIO</label>
-          <textarea id="profileBio" name="bio"></textarea>
-        </div>
-        <div class="field">
-          <label for="profilePicture">PICTURE URL</label>
-          <input id="profilePicture" name="picture" type="text" placeholder="https://... or uploaded image path" />
-        </div>
-        <div class="field">
-          <label for="profilePictureFile">UPLOAD PROFILE PICTURE</label>
-          <input id="profilePictureFile" name="pictureFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
-        <div class="actions">
-          <button type="button" id="profileUploadBtn" onclick="uploadProfilePicture()">Upload Picture</button>
-          <button type="button" onclick="loadAuth()">Reset</button>
-          <button class="primary" id="profileSaveBtn" type="submit">Save Profile</button>
-        </div>
-      </form>
+
+      <div class="profile-actions">
+        {% if profile_ref %}
+        <button class="primary" id="addFriendBtn" type="button" onclick="sendProfileFriendRequest()">Add Friend</button>
+        <a class="btn" href="/friends">Messages</a>
+        {% endif %}
+        <button type="button" onclick="copyProfileLink()">Copy Link</button>
+      </div>
+
+      {% if not profile_ref %}
+      <div class="tabs">
+        <button class="tab active" id="tabAccount" type="button" onclick="setProfileTab('account')">Account</button>
+        <button class="tab" id="tabPreferences" type="button" onclick="setProfileTab('preferences')">Preferences</button>
+        <button class="tab" id="tabSecurity" type="button" onclick="setProfileTab('security')">Security</button>
+      </div>
+      {% endif %}
+
+      <div class="panel-body">
+        {% if not profile_ref %}
+        <section id="panelAccount">
+          <form class="form" id="profileForm" onsubmit="saveProfile(event)">
+            <div class="form-grid">
+              <div class="field">
+                <label for="profileDisplayName">FULL NAME</label>
+                <input id="profileDisplayName" name="displayName" autocomplete="name" />
+              </div>
+              <div class="field">
+                <label for="profileUsernameReadonly">USERNAME</label>
+                <input id="profileUsernameReadonly" disabled />
+              </div>
+            </div>
+            <div class="field">
+              <label for="profileBio">BIO</label>
+              <textarea id="profileBio" name="bio"></textarea>
+            </div>
+            <input id="profilePicture" name="picture" type="hidden" />
+            <input id="profilePictureFile" name="pictureFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onchange="uploadProfilePicture()" />
+            <div class="actions">
+              <button type="button" id="profileUploadBtn" onclick="selectProfilePicture()">Upload Picture</button>
+              <button type="button" onclick="loadAuth()">Reset</button>
+              <button class="primary" id="profileSaveBtn" type="submit">Save Profile</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="panelPreferences" hidden>
+          <div class="form">
+            <div class="field">
+              <label>THEME</label>
+              <div class="theme-row">
+                <button class="theme-option" id="themeDarkBtn" type="button" onclick="setTheme('dark')">Dark</button>
+                <button class="theme-option" id="themeLightBtn" type="button" onclick="setTheme('light')">Light</button>
+              </div>
+            </div>
+            <div class="note">Theme preference is saved on this browser and applies to profile and social pages.</div>
+          </div>
+        </section>
+
+        <section id="panelSecurity" hidden>
+          <div class="form">
+            <div class="note">Local account session is protected by an access token and refresh cookie.</div>
+            <div class="actions">
+              <button type="button" onclick="handleAuthClick()">Sign Out</button>
+            </div>
+          </div>
+        </section>
+        {% else %}
+        <section id="publicProfileNote">
+          <div class="note">This is a public profile. You can view this user before adding them as a friend.</div>
+        </section>
+        {% endif %}
+      </div>
     </section>
   </main>
   <div id="toastContainer"></div>
@@ -178,10 +331,14 @@
     const API_AUTH_LOGOUT = '/api/auth/logout';
     const API_USER_ME = '/api/users/me';
     const API_USER_ME_PICTURE = '/api/users/me/picture';
+    const API_FRIEND_REQUESTS = '/api/friends/requests';
     const AUTH_LOGIN = '/login';
+    const PROFILE_REF = {{ profile_ref | default('', true) | tojson }};
+    const THEME_KEY = 'cryptoAgentTheme';
 
     let accessToken = null;
     let authState = { authenticated: false, user: null };
+    let viewedUser = null;
 
     function escapeHtml(value) {
       return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -199,6 +356,19 @@
     }
     function isPictureSrc(value) {
       return !!value && (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/uploads/'));
+    }
+    function setTheme(theme) {
+      const value = theme === 'light' ? 'light' : 'dark';
+      document.body.dataset.theme = value;
+      localStorage.setItem(THEME_KEY, value);
+      document.getElementById('themeDarkBtn')?.classList.toggle('active', value === 'dark');
+      document.getElementById('themeLightBtn')?.classList.toggle('active', value === 'light');
+    }
+    function setProfileTab(tab) {
+      for (const name of ['account', 'preferences', 'security']) {
+        document.getElementById(`panel${name[0].toUpperCase()}${name.slice(1)}`)?.toggleAttribute('hidden', name !== tab);
+        document.getElementById(`tab${name[0].toUpperCase()}${name.slice(1)}`)?.classList.toggle('active', name === tab);
+      }
     }
     function applyAuthPayload(data) {
       if (data?.accessToken) accessToken = data.accessToken;
@@ -226,35 +396,58 @@
         const res = await authFetch(API_AUTH_ME);
         const data = await res.json().catch(() => ({}));
         authState = { authenticated: !!data.authenticated, user: data.user || null };
+        if (authState.authenticated && PROFILE_REF) {
+          await loadPublicProfile(PROFILE_REF);
+        } else {
+          viewedUser = null;
+        }
       } catch (e) {
         accessToken = null;
         authState = { authenticated: false, user: null };
+        viewedUser = null;
       }
       renderProfile();
     }
+    async function loadPublicProfile(userRef) {
+      const res = await authFetch(`/api/users/${encodeURIComponent(userRef)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not load profile');
+        viewedUser = null;
+        return;
+      }
+      viewedUser = data.user;
+    }
     function renderProfile() {
-      const user = authState.user || {};
+      const publicMode = !!PROFILE_REF;
+      const user = (publicMode ? viewedUser : authState.user) || {};
       window.cryptoAgentIsAuthenticated = () => authState.authenticated;
       window.cryptoAgentCurrentUserId = () => authState.user?.id || '';
       window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
-      document.getElementById('authStatus').textContent = authState.authenticated ? `Signed in as ${userName(user)}` : 'Login to edit your account profile';
+      document.getElementById('authStatus').textContent = publicMode
+        ? (user.username ? `Viewing @${user.username}` : 'Public profile')
+        : (authState.authenticated ? `Signed in as ${userName(user)}` : 'Login to edit your account profile');
       document.getElementById('authBtn').textContent = authState.authenticated ? 'Logout' : 'Login';
 
       const avatar = document.getElementById('profileAvatarPreview');
-      if (authState.authenticated && isPictureSrc(user.picture || '')) {
+      if (authState.authenticated && user.id && isPictureSrc(user.picture || '')) {
         avatar.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="" />`;
       } else {
-        avatar.textContent = authState.authenticated ? userInitial(user) : '?';
+        avatar.textContent = authState.authenticated && user.id ? userInitial(user) : '?';
       }
-      document.getElementById('profileNamePreview').textContent = authState.authenticated ? userName(user) : 'Guest';
-      document.getElementById('profileUsernamePreview').textContent = authState.authenticated ? `@${user.username || 'local-user'}` : 'Login to edit your profile';
-      document.getElementById('profileBioPreview').textContent = authState.authenticated ? (user.bio || '') : '';
+      document.getElementById('profileNamePreview').textContent = authState.authenticated && user.id ? userName(user) : 'Guest';
+      document.getElementById('profileUsernamePreview').textContent = authState.authenticated && user.id ? `@${user.username || 'local-user'}` : 'Login to view profiles';
+      document.getElementById('profileBioPreview').textContent = authState.authenticated && user.id ? (user.bio || '') : '';
 
-      document.getElementById('profileDisplayName').value = authState.authenticated ? (user.displayName || user.name || '') : '';
-      document.getElementById('profileBio').value = authState.authenticated ? (user.bio || '') : '';
-      document.getElementById('profilePicture').value = authState.authenticated ? (user.picture || '') : '';
-      for (const el of document.querySelectorAll('#profileForm input, #profileForm textarea, #profileForm button')) {
-        el.disabled = !authState.authenticated;
+      const form = document.getElementById('profileForm');
+      if (form) {
+        document.getElementById('profileDisplayName').value = authState.authenticated ? (user.displayName || user.name || '') : '';
+        document.getElementById('profileUsernameReadonly').value = authState.authenticated ? (user.username || '') : '';
+        document.getElementById('profileBio').value = authState.authenticated ? (user.bio || '') : '';
+        document.getElementById('profilePicture').value = authState.authenticated ? (user.picture || '') : '';
+        for (const el of form.querySelectorAll('input, textarea, button')) {
+          el.disabled = !authState.authenticated;
+        }
       }
     }
     async function handleAuthClick() {
@@ -291,19 +484,19 @@
       renderProfile();
       showToast('Profile saved');
     }
+    function selectProfilePicture() {
+      document.getElementById('profilePictureFile')?.click();
+    }
     async function uploadProfilePicture() {
       if (!authState.authenticated) {
         showToast('Login required');
         return;
       }
       const input = document.getElementById('profilePictureFile');
-      const file = input.files?.[0];
-      if (!file) {
-        showToast('Choose an image first');
-        return;
-      }
+      const file = input?.files?.[0];
+      if (!file) return;
       const uploadBtn = document.getElementById('profileUploadBtn');
-      uploadBtn.disabled = true;
+      if (uploadBtn) uploadBtn.disabled = true;
       try {
         const res = await authFetch(API_USER_ME_PICTURE, {
           method: 'POST',
@@ -320,9 +513,29 @@
         renderProfile();
         showToast('Profile picture uploaded');
       } finally {
-        uploadBtn.disabled = !authState.authenticated;
+        if (uploadBtn) uploadBtn.disabled = !authState.authenticated;
       }
     }
+    async function sendProfileFriendRequest() {
+      if (!viewedUser?.id) return;
+      const res = await authFetch(API_FRIEND_REQUESTS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: viewedUser.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Could not send friend request');
+        return;
+      }
+      showToast('Friend request sent');
+    }
+    async function copyProfileLink() {
+      await navigator.clipboard?.writeText(window.location.href);
+      showToast('Profile link copied');
+    }
+
+    setTheme(localStorage.getItem(THEME_KEY) || 'dark');
     loadAuth();
   </script>
   {% include "partials/global_chat_bubble.html" %}

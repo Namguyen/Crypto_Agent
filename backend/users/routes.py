@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.auth.dependencies import require_user
 from backend.auth.store import get_user_by_id
-from backend.users.store import search_public_users, update_user_profile
+from backend.users.store import get_public_user_profile_by_ref, search_public_users, update_user_profile
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -111,3 +111,11 @@ async def upload_profile_picture(request: Request, user=Depends(require_user)):
         picture=public_url,
     )
     return {"user": get_user_by_id(user["id"]), "picture": public_url}
+
+
+@router.get("/{user_ref}")
+def public_profile(user_ref: str, user=Depends(require_user)):
+    profile = get_public_user_profile_by_ref(user_ref)
+    if not profile:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+    return {"user": profile}

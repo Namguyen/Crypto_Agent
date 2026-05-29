@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import requests
 from fastapi.testclient import TestClient
 
 
@@ -147,10 +148,17 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("CRYPTO AGENT online", index.text)
             self.assertIn('id="accountMenu"', index.text)
             self.assertIn("handleAccountTrigger", index.text)
-            self.assertIn('id="globalDirectChatBubble"', index.text)
-            self.assertIn('id="globalDirectChatPanel"', index.text)
-            self.assertIn('id="globalDirectChatInput"', index.text)
+            self.assertIn('id="globalDirectChatDock"', index.text)
+            self.assertIn('id="globalDirectChatPanels"', index.text)
+            self.assertIn("global-chat-panel", index.text)
+            self.assertIn("global-chat-input", index.text)
             self.assertIn("new WebSocket", index.text)
+            self.assertIn("cryptoAgentDirectConversations", index.text)
+            self.assertIn("cryptoAgentDismissedDirectConversations", index.text)
+            self.assertIn("global-chat-bubble-close", index.text)
+            self.assertIn("cryptoAgentNotify", index.text)
+            self.assertIn("CONVERSATION_POLL_MS", index.text)
+            self.assertIn("CHECK NOW", index.text)
             self.assertIn("/api/dev/reload-version", index.text)
             self.assertNotIn('data-initial-page=', index.text)
             self.assertNotIn('<div id="friendSearchResults"', index.text)
@@ -163,19 +171,23 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="socialChatCol"', friends.text)
             self.assertIn('id="socialChatMessages"', friends.text)
             self.assertIn('id="directChatBubble"', friends.text)
+            self.assertIn("direct-chat-bubble-close", friends.text)
             self.assertIn("startDirectChatBubbleDrag", friends.text)
             self.assertIn("API_FRIEND_REQUESTS", friends.text)
             self.assertIn("API_CONVERSATIONS", friends.text)
             self.assertIn("cryptoAgentDirectConversation", friends.text)
+            self.assertIn("conversationNotificationPoll", friends.text)
 
             profiles = client.get("/profiles")
             self.assertEqual(profiles.status_code, 200)
             self.assertIn('id="profileForm"', profiles.text)
-            self.assertIn('id="globalDirectChatBubble"', profiles.text)
-            self.assertIn('id="globalDirectChatPanel"', profiles.text)
+            self.assertIn('id="globalDirectChatDock"', profiles.text)
+            self.assertIn('id="globalDirectChatPanels"', profiles.text)
             self.assertIn('id="profileDisplayName"', profiles.text)
             self.assertIn('id="profileBio"', profiles.text)
             self.assertIn('id="profilePicture"', profiles.text)
+            self.assertIn('id="themeLightBtn"', profiles.text)
+            self.assertIn('id="tabPreferences"', profiles.text)
             self.assertIn("API_USER_ME", profiles.text)
 
             profile = client.get("/profile")
@@ -319,6 +331,39 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(read.status_code, 200)
             self.assertEqual(read.json()["unreadCount"], 0)
 
+    def test_market_price_provider_fallbacks(self):
+        from backend import app as backend_app
+
+        class MockResponse:
+            def __init__(self, payload=None, error=None):
+                self.payload = payload or {}
+                self.error = error
+
+            def raise_for_status(self):
+                if self.error:
+                    raise self.error
+
+            def json(self):
+                return self.payload
+
+        def fake_get(url, **kwargs):
+            if "api.binance.com" in url or "api.binance.us" in url:
+                return MockResponse(error=requests.HTTPError("binance unavailable"))
+            if "api.exchange.coinbase.com/products/BTC-USD/stats" in url:
+                return MockResponse({"last": "73000", "open": "70000"})
+            if "api.coingecko.com" in url:
+                return MockResponse({"binancecoin": {"usd": 620, "usd_24h_change": 3.4}})
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with patch("backend.app.requests.get", side_effect=fake_get):
+            prices = backend_app.fetch_market_prices(["bitcoin", "binancecoin"])
+
+        self.assertEqual(prices["bitcoin"]["source"], "coinbase")
+        self.assertAlmostEqual(prices["bitcoin"]["usd"], 73000)
+        self.assertAlmostEqual(prices["bitcoin"]["usd_24h_change"], (3000 / 70000) * 100)
+        self.assertEqual(prices["binancecoin"]["source"], "coingecko")
+        self.assertEqual(prices["binancecoin"]["usd_24h_change"], 3.4)
+
     def test_user_search_and_friend_requests(self):
         with TestClient(self.app) as client:
             seed_login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
@@ -356,6 +401,26 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("socialbob", found_usernames)
             self.assertIn("socialcharlie", found_usernames)
             self.assertNotIn("seed", found_usernames)
+
+            public_charlie = client.get("/api/users/socialcharlie", headers=seed_headers)
+            self.assertEqual(public_charlie.status_code, 200)
+            self.assertEqual(public_charlie.json()["user"]["username"], "socialcharlie")
+            self.assertEqual(public_charlie.json()["user"]["id"], charlie_id)
+
+            public_charlie_by_id = client.get(f"/api/users/{charlie_id}", headers=seed_headers)
+            self.assertEqual(public_charlie_by_id.status_code, 200)
+            self.assertEqual(public_charlie_by_id.json()["user"]["username"], "socialcharlie")
+
+            missing_public_profile = client.get("/api/users/not-a-real-user", headers=seed_headers)
+            self.assertEqual(missing_public_profile.status_code, 404)
+
+            public_profile_page = client.get("/profiles/socialcharlie")
+            self.assertEqual(public_profile_page.status_code, 200)
+            self.assertIn("PROFILE_REF", public_profile_page.text)
+            self.assertIn("publicProfileNote", public_profile_page.text)
+            self.assertIn('id="addFriendBtn"', public_profile_page.text)
+            self.assertNotIn('id="profilePicture"', public_profile_page.text)
+            self.assertNotIn('id="profileForm"', public_profile_page.text)
 
             self_request = client.post(
                 "/api/friends/requests",
