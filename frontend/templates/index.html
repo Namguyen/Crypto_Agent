@@ -50,20 +50,37 @@
       flex-shrink: 0;
     }
 
+    .auth-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
     .auth-box {
       display: flex;
       align-items: center;
-      gap: 7px;
+      justify-content: center;
+      gap: 8px;
       min-width: 0;
-      max-width: 220px;
-      padding: 3px 7px;
+      max-width: 230px;
+      min-height: 32px;
+      padding: 4px 10px 4px 7px;
       background: #0f1219;
-      border: 1px solid #1e2330;
-      border-radius: 4px;
+      border: 1px solid #2a3040;
+      border-radius: 999px;
+      cursor: pointer;
+      color: #c8cdd8;
+      font-family: inherit;
+    }
+    .auth-box:hover {
+      border-color: rgba(239,159,39,.55);
+      background: #121720;
+    }
+    .auth-box.signed-in {
+      border-radius: 8px;
+      padding-right: 8px;
     }
     .auth-avatar {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       object-fit: cover;
       display: none;
@@ -72,33 +89,157 @@
     .auth-box.signed-in .auth-avatar {
       display: block;
     }
+    .auth-initial {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border: 1px solid rgba(239,159,39,.4);
+      color: #ef9f27;
+      font-size: 12px;
+      font-weight: 700;
+      background: #0b0d11;
+    }
+    .auth-box.signed-in .auth-initial {
+      background: #8f3bb6;
+      border-color: #8f3bb6;
+      color: #fff;
+    }
     .auth-name {
       max-width: 105px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #6b7488;
-      font-size: 10px;
-      letter-spacing: .04em;
+      color: #ef9f27;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0;
     }
     .auth-box.signed-in .auth-name {
       color: #c8cdd8;
     }
+    .account-caret {
+      color: #6b7488;
+      font-size: 9px;
+      margin-left: 2px;
+    }
     .auth-btn {
       background: transparent;
-      border: 1px solid #2a3040;
-      color: #EF9F27;
-      font-size: 9px;
-      padding: 3px 6px;
-      border-radius: 4px;
+      border: none;
+      color: #d7dbe4;
+      font-size: 12px;
+      padding: 0;
       cursor: pointer;
       font-family: inherit;
-      letter-spacing: .06em;
-      flex-shrink: 0;
+      letter-spacing: 0;
+      text-align: left;
     }
     .auth-btn:hover {
-      border-color: rgba(239,159,39,.5);
-      background: rgba(239,159,39,.08);
+      color: #ef9f27;
+    }
+    .account-menu {
+      position: absolute;
+      top: 40px;
+      right: 0;
+      width: 300px;
+      display: none;
+      background: #202124;
+      border: 1px solid #3a3b3f;
+      border-radius: 8px;
+      box-shadow: 0 18px 36px rgba(0,0,0,.48);
+      z-index: 60;
+      overflow: hidden;
+      color: #e8eaed;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .account-menu.open { display: block; }
+    .account-head {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px;
+      border-bottom: 1px solid #3a3b3f;
+    }
+    .account-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: #8f3bb6;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .account-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .account-name {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .account-username {
+      color: #c7c7c7;
+      font-size: 13px;
+      line-height: 1.35;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .account-profile-link {
+      display: inline-flex;
+      margin-top: 8px;
+      color: #3ea6ff;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .account-section {
+      padding: 8px 0;
+      border-bottom: 1px solid #3a3b3f;
+    }
+    .account-section:last-child { border-bottom: none; }
+    .account-item {
+      width: 100%;
+      min-height: 40px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border: 0;
+      background: transparent;
+      color: #e8eaed;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: Arial, Helvetica, sans-serif;
+      text-align: left;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .account-item:hover {
+      background: #303134;
+      color: #fff;
+    }
+    .account-icon {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      color: #e8eaed;
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .account-item-muted {
+      color: #c7c7c7;
     }
     .notif-wrap {
       position: relative;
@@ -234,6 +375,9 @@
     }
     .friends-btn {
       height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid #1e2330;
       border-radius: 6px;
       background: #0f1219;
@@ -243,6 +387,8 @@
       font-size: 10px;
       letter-spacing: .08em;
       padding: 0 10px;
+      line-height: 1;
+      text-decoration: none;
     }
     .friends-btn:hover {
       border-color: rgba(239,159,39,.55);
@@ -1109,11 +1255,40 @@
       <span class="brand">CRYPTO AGENT_</span>
     </div>
     <div class="hdr-right">
-      <div class="auth-box" id="authBox">
-        <img class="auth-avatar" id="authAvatar" alt="" />
-        <span class="auth-name" id="authName">GUEST</span>
-        <button class="auth-btn" id="authBtn" onclick="handleAuthClick()">LOGIN</button>
-        <button class="auth-btn" id="registerBtn" style="background:#10202a;border-color:#123;" onclick="registerPrompt()">REGISTER</button>
+      <div class="auth-wrap" id="authWrap">
+        <button class="auth-box" id="authBox" type="button" onclick="handleAccountTrigger()" aria-haspopup="menu" aria-expanded="false">
+          <span class="auth-initial" id="authInitial">?</span>
+          <img class="auth-avatar" id="authAvatar" alt="" />
+          <span class="auth-name" id="authName">Sign in</span>
+          <span class="account-caret" id="accountCaret">v</span>
+        </button>
+        <button class="auth-btn" id="registerBtn" style="display:none" onclick="registerPrompt()">REGISTER</button>
+        <div class="account-menu" id="accountMenu" role="menu">
+          <div class="account-head">
+            <div class="account-avatar" id="accountMenuAvatar">?</div>
+            <div>
+              <div class="account-name" id="accountMenuName">Guest</div>
+              <div class="account-username" id="accountMenuUsername">@guest</div>
+              <a class="account-profile-link" href="/profiles">View your profile</a>
+            </div>
+          </div>
+          <div class="account-section">
+            <a class="account-item" href="/profiles"><span class="account-icon">P</span><span>Profile settings</span></a>
+            <a class="account-item" href="/friends"><span class="account-icon">M</span><span>Friends and messages</span></a>
+            <a class="account-item" href="/admin"><span class="account-icon">A</span><span>Admin dashboard</span></a>
+          </div>
+          <div class="account-section">
+            <button class="account-item" type="button" onclick="switchAccount()"><span class="account-icon">S</span><span>Switch account</span></button>
+            <button class="account-item" id="authBtn" type="button" onclick="handleAuthClick()"><span class="account-icon">X</span><span id="authBtnLabel">Sign out</span></button>
+          </div>
+          <div class="account-section">
+            <button class="account-item" type="button" onclick="setChatMode('instant')"><span class="account-icon">I</span><span>Instant mode</span></button>
+            <button class="account-item" type="button" onclick="setChatMode('reasoning')"><span class="account-icon">R</span><span>Reasoning mode</span></button>
+          </div>
+          <div class="account-section">
+            <button class="account-item account-item-muted" type="button" onclick="showToast('Settings are on the profile page')"><span class="account-icon">?</span><span>Help and feedback</span></button>
+          </div>
+        </div>
       </div>
       <div class="notif-wrap">
         <button class="notif-btn" id="notifBtn" type="button" title="Price notifications" onclick="toggleNotifications()">!</button>
@@ -2431,39 +2606,93 @@ function syncChatControls() {
 function renderAuthState() {
   const box = document.getElementById('authBox');
   const avatar = document.getElementById('authAvatar');
+  const initial = document.getElementById('authInitial');
   const name = document.getElementById('authName');
   const btn = document.getElementById('authBtn');
+  const btnLabel = document.getElementById('authBtnLabel');
   const registerBtn = document.getElementById('registerBtn');
+  const menuAvatar = document.getElementById('accountMenuAvatar');
+  const menuName = document.getElementById('accountMenuName');
+  const menuUsername = document.getElementById('accountMenuUsername');
   window.cryptoAgentIsAuthenticated = () => authState.authenticated;
   window.cryptoAgentGlobalChatBubble?.sync(authState.authenticated);
   if (!box || !avatar || !name || !btn) return;
 
   box.classList.toggle('signed-in', authState.authenticated);
+  box.setAttribute('aria-expanded', document.getElementById('accountMenu')?.classList.contains('open') ? 'true' : 'false');
 
   if (authState.authenticated) {
     const user = authState.user || {};
-    name.textContent = user.name || user.email || 'SIGNED IN';
-    btn.textContent = 'LOGOUT';
+    const displayName = user.displayName || user.name || user.username || user.email || 'Signed in';
+    const username = user.username ? `@${user.username}` : (user.email || '@local-user');
+    const userInitialValue = userInitial(user);
+    name.textContent = displayName;
+    if (btnLabel) btnLabel.textContent = 'Sign out';
+    if (initial) {
+      initial.textContent = userInitialValue;
+      initial.style.display = user.picture && user.picture.startsWith('http') ? 'none' : 'grid';
+    }
     if (user.picture && user.picture.startsWith('http')) {
       avatar.src = user.picture;
       avatar.style.display = '';
+      if (menuAvatar) menuAvatar.innerHTML = `<img src="${escape(user.picture)}" alt="" />`;
     } else {
       avatar.removeAttribute('src');
       avatar.style.display = 'none';
+      if (menuAvatar) menuAvatar.textContent = userInitialValue;
     }
+    if (menuName) menuName.textContent = displayName;
+    if (menuUsername) menuUsername.textContent = username;
   } else {
-    name.textContent = 'AUTH';
-    btn.textContent = 'LOGIN';
+    name.textContent = 'Sign in';
+    if (btnLabel) btnLabel.textContent = 'Sign in';
+    if (initial) {
+      initial.textContent = 'U';
+      initial.style.display = 'grid';
+    }
     avatar.removeAttribute('src');
     avatar.style.display = 'none';
+    if (menuAvatar) menuAvatar.textContent = '?';
+    if (menuName) menuName.textContent = 'Guest';
+    if (menuUsername) menuUsername.textContent = 'Login required';
+    closeAccountMenu();
   }
 
   if (registerBtn) {
-    registerBtn.style.display = (!authState.authenticated && authState.registrationEnabled) ? '' : 'none';
+    registerBtn.style.display = 'none';
   }
 
   renderProfilePanel();
   syncChatControls();
+}
+
+function toggleAccountMenu(forceOpen = null) {
+  const menu = document.getElementById('accountMenu');
+  const box = document.getElementById('authBox');
+  if (!menu || !box || !authState.authenticated) return;
+  const open = forceOpen === null ? !menu.classList.contains('open') : forceOpen;
+  menu.classList.toggle('open', open);
+  box.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function closeAccountMenu() {
+  const menu = document.getElementById('accountMenu');
+  const box = document.getElementById('authBox');
+  menu?.classList.remove('open');
+  box?.setAttribute('aria-expanded', 'false');
+}
+
+function handleAccountTrigger() {
+  if (!authState.authenticated) {
+    window.location.href = authState.loginUrl || AUTH_LOGIN;
+    return;
+  }
+  toggleAccountMenu();
+}
+
+function switchAccount() {
+  closeAccountMenu();
+  window.location.href = authState.loginUrl || AUTH_LOGIN;
 }
 
 async function handleAuthClick() {
@@ -2485,6 +2714,7 @@ async function handleAuthClick() {
     directChatState = { conversation: null, messages: [] };
     directChatMinimized = false;
     localStorage.removeItem('cryptoAgentDirectConversation');
+    closeAccountMenu();
     closeToolPanels();
     renderAuthState();
     renderNotes();
@@ -2623,7 +2853,12 @@ window.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape') {
     closeToolPanels();
+    closeAccountMenu();
   }
+});
+window.addEventListener('click', e => {
+  const authWrap = document.getElementById('authWrap');
+  if (authWrap && !authWrap.contains(e.target)) closeAccountMenu();
 });
 window.addEventListener('pointermove', moveDirectChat);
 window.addEventListener('pointerup', stopDirectChatDrag);

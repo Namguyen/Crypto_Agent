@@ -31,6 +31,149 @@
     color: #111;
     font-weight: 900;
   }
+  .global-chat-panel {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    width: min(360px, calc(100vw - 24px));
+    height: min(510px, calc(100vh - 36px));
+    display: none;
+    grid-template-rows: auto 1fr auto;
+    background: #10141d;
+    border: 1px solid #252d3c;
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 82;
+    box-shadow: 0 18px 42px rgba(0,0,0,.5);
+    font-family: Arial, Helvetica, sans-serif;
+    color: #e8edf6;
+  }
+  .global-chat-panel.open { display: grid; }
+  .global-chat-head {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #222936;
+    background: #121722;
+  }
+  .global-chat-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #ef9f27;
+    color: #111;
+    font-weight: 900;
+  }
+  .global-chat-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .global-chat-subtitle {
+    margin-top: 2px;
+    color: #8c96a8;
+    font-size: 11px;
+  }
+  .global-chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .global-chat-icon-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #2d3545;
+    background: #0b0f16;
+    color: #ef9f27;
+    border-radius: 5px;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+  }
+  .global-chat-icon-btn:hover {
+    border-color: rgba(239,159,39,.65);
+    background: rgba(239,159,39,.08);
+  }
+  .global-chat-messages {
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #0b0d11;
+  }
+  .global-chat-empty {
+    margin: auto;
+    max-width: 260px;
+    color: #8c96a8;
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .global-chat-message {
+    max-width: 82%;
+    padding: 9px 11px;
+    border: 1px solid #242c3a;
+    border-radius: 8px;
+    background: #171d28;
+    color: #e8edf6;
+    font-size: 13px;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .global-chat-message.own {
+    align-self: flex-end;
+    background: #211908;
+    border-color: #5a3a0e;
+    color: #ffdba0;
+  }
+  .global-chat-composer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid #222936;
+    background: #10141d;
+  }
+  .global-chat-input {
+    min-width: 0;
+    min-height: 36px;
+    border: 1px solid #252d3c;
+    background: #080b10;
+    color: #e8edf6;
+    border-radius: 6px;
+    padding: 0 10px;
+    outline: none;
+    font: inherit;
+    font-size: 13px;
+  }
+  .global-chat-input:focus { border-color: #ef9f27; }
+  .global-chat-send {
+    min-height: 36px;
+    border: 1px solid #ef9f27;
+    background: #ef9f27;
+    color: #111;
+    border-radius: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .global-chat-send:disabled,
+  .global-chat-input:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
 </style>
 
 <div class="global-chat-bubble" id="globalDirectChatBubble" title="Open direct chat">
@@ -38,15 +181,62 @@
   <span id="globalDirectChatBubbleLabel">Direct chat</span>
 </div>
 
+<section class="global-chat-panel" id="globalDirectChatPanel" aria-label="Direct chat">
+  <div class="global-chat-head">
+    <div class="global-chat-avatar" id="globalDirectChatPanelInitial">?</div>
+    <div>
+      <div class="global-chat-title" id="globalDirectChatPanelTitle">Direct chat</div>
+      <div class="global-chat-subtitle">Floating chat</div>
+    </div>
+    <div class="global-chat-actions">
+      <button class="global-chat-icon-btn" type="button" title="Open full chat" id="globalDirectChatFullBtn">F</button>
+      <button class="global-chat-icon-btn" type="button" title="Minimize" id="globalDirectChatMinBtn">-</button>
+    </div>
+  </div>
+  <div class="global-chat-messages" id="globalDirectChatMessages">
+    <div class="global-chat-empty">Open a direct chat from Friends first.</div>
+  </div>
+  <div class="global-chat-composer">
+    <input class="global-chat-input" id="globalDirectChatInput" type="text" placeholder="Message..." disabled />
+    <button class="global-chat-send" id="globalDirectChatSendBtn" type="button" disabled>Send</button>
+  </div>
+</section>
+
 <script>
 (() => {
   const STORAGE_KEY = 'cryptoAgentDirectConversation';
   const POSITION_KEY = 'cryptoAgentDirectBubblePosition';
+  const API_AUTH_REFRESH = '/api/auth/refresh';
+  const API_CONVERSATIONS = '/api/conversations';
+
   const bubble = document.getElementById('globalDirectChatBubble');
-  const initial = document.getElementById('globalDirectChatBubbleInitial');
-  const label = document.getElementById('globalDirectChatBubbleLabel');
+  const bubbleInitial = document.getElementById('globalDirectChatBubbleInitial');
+  const bubbleLabel = document.getElementById('globalDirectChatBubbleLabel');
+  const panel = document.getElementById('globalDirectChatPanel');
+  const panelInitial = document.getElementById('globalDirectChatPanelInitial');
+  const panelTitle = document.getElementById('globalDirectChatPanelTitle');
+  const messagesRoot = document.getElementById('globalDirectChatMessages');
+  const input = document.getElementById('globalDirectChatInput');
+  const sendBtn = document.getElementById('globalDirectChatSendBtn');
+  const minBtn = document.getElementById('globalDirectChatMinBtn');
+  const fullBtn = document.getElementById('globalDirectChatFullBtn');
+
   let drag = null;
   let suppressClick = false;
+  let accessToken = null;
+  let authenticatedState = false;
+  let activeConversation = null;
+  let messages = [];
+  let pollTimer = null;
+  let sending = false;
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
   function readConversation() {
     try {
@@ -77,17 +267,163 @@
     bubble.style.bottom = 'auto';
   }
 
-  function sync(authenticated) {
-    const conversation = readConversation();
-    if (!authenticated || !conversation?.id) {
+  function conversationName() {
+    return activeConversation?.otherName || 'Direct chat';
+  }
+
+  function conversationInitial() {
+    return (activeConversation?.initial || conversationName().slice(0, 1) || '?').toUpperCase();
+  }
+
+  function renderShell() {
+    const name = conversationName();
+    const initial = conversationInitial();
+    bubbleInitial.textContent = initial;
+    bubbleLabel.textContent = name;
+    panelInitial.textContent = initial;
+    panelTitle.textContent = name;
+  }
+
+  function renderMessages(statusText = '') {
+    input.disabled = !activeConversation || !authenticatedState || sending;
+    sendBtn.disabled = input.disabled;
+    if (statusText) {
+      messagesRoot.innerHTML = `<div class="global-chat-empty">${escapeHtml(statusText)}</div>`;
+      return;
+    }
+    messagesRoot.innerHTML = messages.length
+      ? messages.map(message => `<div class="global-chat-message ${message.isOwn ? 'own' : ''}">${escapeHtml(message.content)}</div>`).join('')
+      : '<div class="global-chat-empty">No messages yet.</div>';
+    messagesRoot.scrollTop = messagesRoot.scrollHeight;
+  }
+
+  function showBubble() {
+    if (!authenticatedState || !activeConversation?.id || panel.classList.contains('open')) {
       bubble.classList.remove('open');
       return;
     }
-    const name = conversation.otherName || 'Direct chat';
-    initial.textContent = (conversation.initial || name.slice(0, 1) || '?').toUpperCase();
-    label.textContent = name;
+    renderShell();
     applyPosition();
     bubble.classList.add('open');
+  }
+
+  function hideAll() {
+    bubble.classList.remove('open');
+    panel.classList.remove('open');
+    stopPolling();
+  }
+
+  async function refreshAccessToken() {
+    try {
+      const res = await fetch(API_AUTH_REFRESH, { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.accessToken) {
+        accessToken = null;
+        return false;
+      }
+      accessToken = data.accessToken;
+      return true;
+    } catch (e) {
+      accessToken = null;
+      return false;
+    }
+  }
+
+  async function authFetch(url, options = {}, retry = true) {
+    const headers = new Headers(options.headers || {});
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+    const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+    if (res.status === 401 && retry && await refreshAccessToken()) {
+      return authFetch(url, options, false);
+    }
+    return res;
+  }
+
+  async function loadMessages(silent = false) {
+    if (!activeConversation?.id) return;
+    if (!silent) renderMessages('Loading messages...');
+    try {
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/messages`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not load messages');
+      messages = data.messages || [];
+      await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/read`, { method: 'POST' }, false);
+      renderMessages();
+    } catch (e) {
+      if (!silent) renderMessages(e.message || 'Could not load messages');
+    }
+  }
+
+  async function sendMessage() {
+    const content = input.value.trim();
+    if (!activeConversation?.id || !content || sending) return;
+    input.value = '';
+    sending = true;
+    renderMessages();
+    try {
+      const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(activeConversation.id)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not send message');
+      messages.push(data.message);
+    } catch (e) {
+      renderMessages(e.message || 'Could not send message');
+      sending = false;
+      input.focus();
+      return;
+    } finally {
+      sending = false;
+    }
+    renderMessages();
+    input.focus();
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(() => loadMessages(true), 8000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  async function openPanel() {
+    if (!activeConversation?.id || !authenticatedState) return;
+    renderShell();
+    bubble.classList.remove('open');
+    panel.classList.add('open');
+    await loadMessages(false);
+    startPolling();
+    input.focus();
+  }
+
+  function minimizePanel() {
+    panel.classList.remove('open');
+    stopPolling();
+    showBubble();
+  }
+
+  function openFullChat() {
+    const suffix = activeConversation?.id ? `?conversation=${encodeURIComponent(activeConversation.id)}` : '';
+    window.location.href = `/friends${suffix}`;
+  }
+
+  function sync(authenticated) {
+    authenticatedState = !!authenticated;
+    activeConversation = readConversation();
+    if (!authenticatedState || !activeConversation?.id) {
+      hideAll();
+      return;
+    }
+    renderShell();
+    if (panel.classList.contains('open')) {
+      return;
+    }
+    showBubble();
   }
 
   bubble.addEventListener('click', () => {
@@ -95,9 +431,17 @@
       suppressClick = false;
       return;
     }
-    const conversation = readConversation();
-    const suffix = conversation?.id ? `?conversation=${encodeURIComponent(conversation.id)}` : '';
-    window.location.href = `/friends${suffix}`;
+    openPanel();
+  });
+
+  minBtn.addEventListener('click', minimizePanel);
+  fullBtn.addEventListener('click', openFullChat);
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      sendMessage();
+    }
   });
 
   bubble.addEventListener('pointerdown', event => {
@@ -132,11 +476,11 @@
 
   window.addEventListener('storage', event => {
     if (event.key === STORAGE_KEY || event.key === POSITION_KEY) {
-      const authenticated = window.cryptoAgentIsAuthenticated?.() || false;
-      sync(authenticated);
+      sync(window.cryptoAgentIsAuthenticated?.() || false);
     }
   });
 
-  window.cryptoAgentGlobalChatBubble = { sync };
+  window.cryptoAgentGlobalChatBubble = { sync, open: openPanel, minimize: minimizePanel };
+  setTimeout(() => sync(window.cryptoAgentIsAuthenticated?.() || false), 0);
 })();
 </script>
