@@ -39,6 +39,9 @@ def init_auth_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 email TEXT UNIQUE COLLATE NOCASE,
+                display_name TEXT,
+                bio TEXT,
+                picture TEXT,
                 password_hash TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
@@ -126,6 +129,9 @@ def init_auth_db() -> None:
                 ON notification_events(user_id, created_at DESC);
             """
         )
+        ensure_column(conn, "users", "display_name", "TEXT")
+        ensure_column(conn, "users", "bio", "TEXT")
+        ensure_column(conn, "users", "picture", "TEXT")
         ensure_column(conn, "user_requests", "mode", "TEXT NOT NULL DEFAULT 'instant'")
         ensure_column(conn, "user_requests", "model", "TEXT")
 
@@ -142,12 +148,17 @@ def normalize_email(email: Optional[str]) -> Optional[str]:
 
 
 def public_user(row: sqlite3.Row | dict) -> dict:
+    display_name = (row["display_name"] if "display_name" in row.keys() else "") or row["username"]
+    picture = (row["picture"] if "picture" in row.keys() else "") or ""
+    bio = (row["bio"] if "bio" in row.keys() else "") or ""
     return {
         "id": str(row["id"]),
         "username": row["username"],
         "email": row["email"] or "",
-        "name": row["username"],
-        "picture": "",
+        "name": display_name,
+        "displayName": display_name,
+        "bio": bio,
+        "picture": picture,
         "email_verified": bool(row["email"]),
         "provider": "local",
     }

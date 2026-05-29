@@ -12,6 +12,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 12px;
       min-height: 100vh;
       font-family: 'Courier New', Courier, monospace;
       color: #c8cdd8;
@@ -23,10 +24,10 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      width: 1100px; /* Width containing all 3 columns */
-      height: 680px;
+      width: 1180px;
+      max-width: calc(100vw - 24px);
+      height: min(760px, calc(100vh - 24px));
       border: 1px solid #1a1e28;
-      transition: width 0.3s ease;
     }
 
     /* ── Header ── */
@@ -42,6 +43,12 @@
     .amber-dot { width: 8px; height: 8px; border-radius: 50%; background: #EF9F27; flex-shrink: 0; }
     .brand { font-size: 11px; letter-spacing: .16em; color: #EF9F27; font-weight: 600; }
     .hdr-right { display: flex; align-items: center; gap: 16px; }
+    .hdr-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
 
     .auth-box {
       display: flex;
@@ -359,74 +366,8 @@
       font-size: 11px;
       line-height: 1.45;
     }
-    .direct-chat {
-      border-top: 1px solid #1a1e28;
-      padding-top: 10px;
-    }
-    .direct-chat-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .direct-chat-title {
-      color: #ef9f27;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .direct-chat-messages {
-      height: 150px;
-      overflow-y: auto;
-      background: #090b0e;
-      border: 1px solid #1a1e28;
-      border-radius: 6px;
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-    }
-    .direct-msg {
-      max-width: 86%;
-      border-radius: 6px;
-      padding: 7px 8px;
-      font-size: 11px;
-      line-height: 1.45;
-      background: #10141d;
-      color: #c8cdd8;
-      align-self: flex-start;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-    .direct-msg.own {
-      align-self: flex-end;
-      background: #ef9f27;
-      color: #0b0d11;
-      font-weight: 700;
-    }
-    .direct-chat-input {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .direct-chat-input input {
-      flex: 1;
-      min-width: 0;
-      border: 1px solid #1e2330;
-      border-radius: 6px;
-      background: #0f1219;
-      color: #c8cdd8;
-      font-family: inherit;
-      font-size: 11px;
-      padding: 8px 9px;
-      outline: none;
-    }
-    
     /* Notebook toggle button */
+    .tool-btn,
     .toggle-nb-btn {
       background: #0f1219;
       border: 1px solid #1e2330;
@@ -439,8 +380,10 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      text-decoration: none;
       transition: all 0.2s ease;
     }
+    .tool-btn:hover,
     .toggle-nb-btn:hover {
       background: #ef9f27;
       color: #0b0d11;
@@ -473,7 +416,7 @@
     .clock { font-size: 11px; color: #3a4252; letter-spacing: .04em; }
 
     /* ── Body ── */
-    .body { display: flex; flex: 1; overflow: hidden; }
+    .body { display: flex; flex: 1; overflow: hidden; position: relative; }
 
     /* ── Sidebar (Left) ── */
     .sidebar {
@@ -509,6 +452,20 @@
       flex-direction: column; 
       overflow: hidden; 
       min-width: 0; 
+    }
+
+    .panel-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(7, 8, 16, .48);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+      z-index: 15;
+    }
+    .panel-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     /* Quick commands */
@@ -651,20 +608,328 @@
     .sbtn:hover { background: #BA7517; }
     .sbtn:disabled { opacity: .35; cursor: not-allowed; }
 
+    /* Direct messages panel */
+    .social-chat-col {
+      width: min(360px, calc(100% - 28px));
+      height: min(430px, calc(100% - 28px));
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 23;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      background: #090b0e;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 18px 44px rgba(0,0,0,.44);
+      transform: scale(1);
+      transform-origin: bottom right;
+      transition: transform .18s ease, opacity .18s ease;
+    }
+    .social-chat-col.collapsed {
+      opacity: 0;
+      transform: scale(.94);
+      pointer-events: none;
+    }
+    .social-chat-col.dragging {
+      transition: none;
+    }
+    .social-chat-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid #1a1e28;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: #0b0d11;
+      cursor: move;
+      user-select: none;
+    }
+    .social-chat-meta {
+      min-width: 0;
+    }
+    .social-chat-label {
+      color: #4a5268;
+      font-size: 9px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .social-chat-title {
+      color: #ef9f27;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .social-chat-actions {
+      display: flex;
+      gap: 9px;
+      flex-shrink: 0;
+    }
+    .social-chat-messages {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .social-chat-messages::-webkit-scrollbar { width: 4px; }
+    .social-chat-messages::-webkit-scrollbar-thumb { background: #1a1e28; border-radius: 2px; }
+    .direct-msg {
+      max-width: 88%;
+      border-radius: 7px;
+      padding: 9px 10px;
+      font-size: 12px;
+      line-height: 1.55;
+      background: #10141d;
+      color: #c8cdd8;
+      align-self: flex-start;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .direct-msg.own {
+      align-self: flex-end;
+      background: #ef9f27;
+      color: #0b0d11;
+      font-weight: 700;
+    }
+    .social-chat-empty {
+      color: #6b7488;
+      background: #0f1219;
+      border: 1px solid #1a1e28;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .social-chat-composer {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid #1a1e28;
+      background: #0b0d11;
+      flex-shrink: 0;
+    }
+    .social-chat-composer input {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      background: #0f1219;
+      color: #c8cdd8;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 9px 10px;
+      outline: none;
+    }
+    .social-chat-composer input:focus {
+      border-color: rgba(239,159,39,.4);
+    }
+
+    .direct-chat-bubble {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      z-index: 24;
+      min-width: 58px;
+      height: 58px;
+      border-radius: 999px;
+      border: 1px solid rgba(239,159,39,.55);
+      background: #ef9f27;
+      color: #0b0d11;
+      box-shadow: 0 12px 28px rgba(0,0,0,.38);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      cursor: grab;
+      user-select: none;
+      transform: scale(1);
+      transition: transform .16s ease, opacity .16s ease;
+    }
+    .direct-chat-bubble.collapsed {
+      opacity: 0;
+      transform: scale(.85);
+      pointer-events: none;
+    }
+    .direct-chat-bubble.dragging {
+      cursor: grabbing;
+      transition: none;
+    }
+    .direct-chat-bubble-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #0b0d11;
+      color: #ef9f27;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .direct-chat-bubble-label {
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .03em;
+    }
+
     /* ── Notebook Column (Right - Notebook Drawer) ── */
     .notebook-col {
-      width: 340px;
+      width: 380px;
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 21;
       border-left: 1px solid #1a1e28;
       background: #090b0e;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      transition: width 0.3s ease, border-color 0.3s ease;
-      flex-shrink: 0;
+      box-shadow: -18px 0 36px rgba(0,0,0,.34);
+      transform: translateX(0);
+      transition: transform .24s ease;
     }
     .notebook-col.collapsed {
-      width: 0;
-      border-left-color: transparent;
+      transform: translateX(100%);
+      pointer-events: none;
+    }
+
+    .profile-col {
+      width: 380px;
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 22;
+      border-left: 1px solid #1a1e28;
+      background: #090b0e;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: -18px 0 36px rgba(0,0,0,.34);
+      transform: translateX(0);
+      transition: transform .24s ease;
+    }
+    .profile-col.collapsed {
+      transform: translateX(100%);
+      pointer-events: none;
+    }
+    .profile-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
+    .profile-card {
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 7px;
+      padding: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .profile-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #141924;
+      border: 1px solid #2a3040;
+      color: #ef9f27;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .profile-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .profile-user {
+      min-width: 0;
+    }
+    .profile-name {
+      color: #c8cdd8;
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-username {
+      color: #6b7488;
+      font-size: 10px;
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .profile-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .profile-field label {
+      color: #6b7488;
+      font-size: 9px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .profile-field input,
+    .profile-field textarea {
+      width: 100%;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      background: #0f1219;
+      color: #c8cdd8;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 9px 10px;
+      outline: none;
+    }
+    .profile-field textarea {
+      min-height: 88px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    .profile-field input:focus,
+    .profile-field textarea:focus {
+      border-color: rgba(239,159,39,.4);
+    }
+    .profile-save {
+      border: none;
+      border-radius: 6px;
+      background: #ef9f27;
+      color: #0b0d11;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      padding: 9px 10px;
     }
 
     .nb-header {
@@ -834,7 +1099,7 @@
     }
   </style>
 </head>
-<body>
+<body data-initial-page="{{ initial_page | default('home') }}">
 
 <div class="root" id="root">
   <!-- Header -->
@@ -864,57 +1129,30 @@
           <div class="notif-settings" id="notifSettings"></div>
         </div>
       </div>
-      <div class="friends-wrap">
-        <button class="friends-btn" id="friendsBtn" type="button" onclick="toggleFriends()">FRIENDS</button>
-        <div class="friends-panel" id="friendsPanel">
-          <div class="friends-head">
-            <span class="friends-title">FRIENDS</span>
-            <button class="notif-action" type="button" onclick="loadFriends()">REFRESH</button>
-          </div>
-          <div class="friends-body">
-            <div class="friend-search">
-              <input id="friendSearchInput" type="text" placeholder="Search username..." autocomplete="off" />
-              <button type="button" onclick="searchFriends()">SEARCH</button>
-            </div>
-            <div>
-              <div class="friend-section-title">Search Results</div>
-              <div class="friend-list" id="friendSearchResults"></div>
-            </div>
-            <div>
-              <div class="friend-section-title">Received Requests</div>
-              <div class="friend-list" id="friendReceivedRequests"></div>
-            </div>
-            <div>
-              <div class="friend-section-title">Sent Requests</div>
-              <div class="friend-list" id="friendSentRequests"></div>
-            </div>
-            <div>
-              <div class="friend-section-title">Friends</div>
-              <div class="friend-list" id="friendList"></div>
-            </div>
-            <div class="direct-chat" id="directChat"></div>
-          </div>
-        </div>
-      </div>
+      <a class="friends-btn" id="friendsBtn" href="/friends" target="_blank" rel="noopener">FRIENDS</a>
       <!-- Status Indicator -->
       <span class="db-status">LOCAL SYSTEM ACTIVE</span>
-      
-      <button class="toggle-nb-btn" onclick="toggleNotebook()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
-        </svg>
-        NOTEBOOK [TAB]
-      </button>
+      <div class="hdr-tools">
+        <a class="tool-btn" href="/profiles" target="_blank" rel="noopener">PROFILE</a>
+        <button class="tool-btn" type="button" onclick="toggleNotebook()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          NOTEBOOK [TAB]
+        </button>
+      </div>
       <span class="live-badge">MARKETS LIVE</span>
       <span class="clock" id="clk">--:--:--</span>
     </div>
   </div>
 
   <div class="body">
+    <div class="panel-backdrop" id="panelBackdrop" onclick="closeToolPanels()"></div>
+
     <!-- Price sidebar (Left) -->
     <div class="sidebar" id="sb"></div>
 
@@ -962,7 +1200,7 @@
     </div>
 
     <!-- Notebook Column (Right - AI Notebook) -->
-    <div class="notebook-col" id="nbCol">
+    <div class="notebook-col collapsed" id="nbCol">
       <div class="nb-header">
         <span class="nb-title">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -988,6 +1226,7 @@
         <div class="nb-empty">LOADING DATA...</div>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -1011,6 +1250,7 @@ const API_NOTIFICATIONS = '/api/notifications';
 const API_NOTIFICATIONS_CHECK = '/api/notifications/check';
 const API_NOTIFICATIONS_READ = '/api/notifications/read';
 const API_USER_SEARCH = '/api/users/search';
+const API_USER_ME = '/api/users/me';
 const API_FRIENDS = '/api/friends';
 const API_FRIEND_REQUESTS = '/api/friends/requests';
 const API_CONVERSATIONS = '/api/conversations';
@@ -1043,6 +1283,12 @@ let notificationState = { events: [], settings: [], unreadCount: 0 };
 let notificationPoll = null;
 let friendState = { friends: [], sent: [], received: [], searchResults: [] };
 let directChatState = { conversation: null, messages: [] };
+let directChatMinimized = false;
+let directChatPosition = null;
+let directChatDrag = null;
+let directChatBubblePosition = null;
+let directChatBubbleDrag = null;
+let suppressDirectChatBubbleClick = false;
 let authState = {
   authenticated: false,
   user: null,
@@ -1053,6 +1299,210 @@ let authState = {
 };
 let accessToken = null;
 let notes = []; // Persisted locally
+
+const ROOT_VIEWPORT_PADDING = 24;
+
+function syncRootWidth() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  const targetWidth = 1180;
+  const viewportWidth = Math.max(360, window.innerWidth - ROOT_VIEWPORT_PADDING);
+  root.style.width = `${Math.min(targetWidth, viewportWidth)}px`;
+  syncPanelBackdrop();
+}
+
+function isPanelOpen(panelId) {
+  const panel = document.getElementById(panelId);
+  return panel ? !panel.classList.contains('collapsed') : false;
+}
+
+function initialPage() {
+  return document.body.dataset.initialPage || 'home';
+}
+
+function goToFriends() {
+  if (window.location.pathname !== '/friends') {
+    window.location.href = '/friends';
+    return;
+  }
+  toggleFriends();
+}
+
+function goToProfiles() {
+  if (!['/profile', '/profiles'].includes(window.location.pathname)) {
+    window.location.href = '/profiles';
+    return;
+  }
+  toggleProfile();
+}
+
+function syncPanelBackdrop() {
+  const backdrop = document.getElementById('panelBackdrop');
+  if (!backdrop) return;
+  backdrop.classList.toggle('open', isPanelOpen('nbCol') || isPanelOpen('profileCol'));
+}
+
+function closeToolPanels() {
+  document.getElementById('nbCol')?.classList.add('collapsed');
+  document.getElementById('profileCol')?.classList.add('collapsed');
+  closeDirectChat();
+  syncPanelBackdrop();
+}
+
+function closeSidePanels(exceptPanelId = '') {
+  if (exceptPanelId !== 'nbCol') document.getElementById('nbCol')?.classList.add('collapsed');
+  if (exceptPanelId !== 'profileCol') document.getElementById('profileCol')?.classList.add('collapsed');
+  if (exceptPanelId !== 'socialChatCol') {
+    if (directChatState.conversation) directChatMinimized = true;
+    renderDirectChat();
+  }
+  syncPanelBackdrop();
+}
+
+function clampDirectChatPosition(x, y) {
+  const body = document.querySelector('.body');
+  const panel = document.getElementById('socialChatCol');
+  if (!body || !panel) return { x: 14, y: 14 };
+
+  const maxX = Math.max(0, body.clientWidth - panel.offsetWidth - 8);
+  const maxY = Math.max(0, body.clientHeight - panel.offsetHeight - 8);
+  return {
+    x: Math.min(Math.max(8, x), maxX),
+    y: Math.min(Math.max(8, y), maxY),
+  };
+}
+
+function clampDirectChatBubblePosition(x, y) {
+  const body = document.querySelector('.body');
+  const bubble = document.getElementById('directChatBubble');
+  if (!body || !bubble) return { x: 18, y: 18 };
+
+  const maxX = Math.max(0, body.clientWidth - bubble.offsetWidth - 8);
+  const maxY = Math.max(0, body.clientHeight - bubble.offsetHeight - 8);
+  return {
+    x: Math.min(Math.max(8, x), maxX),
+    y: Math.min(Math.max(8, y), maxY),
+  };
+}
+
+function placeDirectChat() {
+  const body = document.querySelector('.body');
+  const panel = document.getElementById('socialChatCol');
+  if (!body || !panel || panel.classList.contains('collapsed')) return;
+
+  if (!directChatPosition) {
+    directChatPosition = {
+      x: Math.max(8, body.clientWidth - panel.offsetWidth - 18),
+      y: Math.max(8, body.clientHeight - panel.offsetHeight - 18),
+    };
+  }
+
+  directChatPosition = clampDirectChatPosition(directChatPosition.x, directChatPosition.y);
+  panel.style.left = `${directChatPosition.x}px`;
+  panel.style.top = `${directChatPosition.y}px`;
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
+}
+
+function placeDirectChatBubble() {
+  const body = document.querySelector('.body');
+  const bubble = document.getElementById('directChatBubble');
+  if (!body || !bubble || bubble.classList.contains('collapsed')) return;
+
+  if (!directChatBubblePosition) {
+    directChatBubblePosition = {
+      x: Math.max(8, body.clientWidth - bubble.offsetWidth - 18),
+      y: Math.max(8, body.clientHeight - bubble.offsetHeight - 18),
+    };
+  }
+
+  directChatBubblePosition = clampDirectChatBubblePosition(directChatBubblePosition.x, directChatBubblePosition.y);
+  bubble.style.left = `${directChatBubblePosition.x}px`;
+  bubble.style.top = `${directChatBubblePosition.y}px`;
+  bubble.style.right = 'auto';
+  bubble.style.bottom = 'auto';
+}
+
+function startDirectChatDrag(event) {
+  if (event.target.closest('button, input, textarea')) return;
+  const body = document.querySelector('.body');
+  const panel = document.getElementById('socialChatCol');
+  if (!body || !panel || panel.classList.contains('collapsed')) return;
+
+  const bodyRect = body.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  directChatDrag = {
+    pointerId: event.pointerId,
+    offsetX: event.clientX - panelRect.left,
+    offsetY: event.clientY - panelRect.top,
+    bodyLeft: bodyRect.left,
+    bodyTop: bodyRect.top,
+  };
+  panel.setPointerCapture?.(event.pointerId);
+  panel.classList.add('dragging');
+  event.preventDefault();
+}
+
+function startDirectChatBubbleDrag(event) {
+  const body = document.querySelector('.body');
+  const bubble = document.getElementById('directChatBubble');
+  if (!body || !bubble || bubble.classList.contains('collapsed')) return;
+
+  const bodyRect = body.getBoundingClientRect();
+  const bubbleRect = bubble.getBoundingClientRect();
+  directChatBubbleDrag = {
+    pointerId: event.pointerId,
+    offsetX: event.clientX - bubbleRect.left,
+    offsetY: event.clientY - bubbleRect.top,
+    bodyLeft: bodyRect.left,
+    bodyTop: bodyRect.top,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+  };
+  bubble.setPointerCapture?.(event.pointerId);
+  bubble.classList.add('dragging');
+}
+
+function moveDirectChat(event) {
+  if (directChatDrag) {
+    directChatPosition = clampDirectChatPosition(
+      event.clientX - directChatDrag.bodyLeft - directChatDrag.offsetX,
+      event.clientY - directChatDrag.bodyTop - directChatDrag.offsetY,
+    );
+    placeDirectChat();
+  }
+  if (directChatBubbleDrag) {
+    if (
+      Math.abs(event.clientX - directChatBubbleDrag.startX) > 3 ||
+      Math.abs(event.clientY - directChatBubbleDrag.startY) > 3
+    ) {
+      directChatBubbleDrag.moved = true;
+    }
+    directChatBubblePosition = clampDirectChatBubblePosition(
+      event.clientX - directChatBubbleDrag.bodyLeft - directChatBubbleDrag.offsetX,
+      event.clientY - directChatBubbleDrag.bodyTop - directChatBubbleDrag.offsetY,
+    );
+    placeDirectChatBubble();
+  }
+}
+
+function stopDirectChatDrag(event) {
+  const panel = document.getElementById('socialChatCol');
+  if (directChatDrag && panel) {
+    panel.releasePointerCapture?.(directChatDrag.pointerId || event.pointerId);
+    panel.classList.remove('dragging');
+  }
+  const bubble = document.getElementById('directChatBubble');
+  if (directChatBubbleDrag && bubble) {
+    suppressDirectChatBubbleClick = directChatBubbleDrag.moved;
+    bubble.releasePointerCapture?.(directChatBubbleDrag.pointerId || event.pointerId);
+    bubble.classList.remove('dragging');
+  }
+  directChatDrag = null;
+  directChatBubbleDrag = null;
+}
 
 function setChatMode(mode) {
   if (!['instant', 'reasoning'].includes(mode)) return;
@@ -1208,38 +1658,71 @@ async function loadFriends() {
 }
 
 function renderDirectChat() {
-  const root = document.getElementById('directChat');
-  if (!root) return;
+  const panel = document.getElementById('socialChatCol');
+  const bubble = document.getElementById('directChatBubble');
+  const bubbleInitial = document.getElementById('directChatBubbleInitial');
+  const bubbleLabel = document.getElementById('directChatBubbleLabel');
+  const title = document.getElementById('socialChatTitle');
+  const messagesRoot = document.getElementById('socialChatMessages');
+  const input = document.getElementById('directChatInput');
+  if (!panel || !messagesRoot) return;
 
   const conversation = directChatState.conversation;
   if (!authState.authenticated) {
-    root.innerHTML = '';
+    directChatMinimized = false;
+    panel.classList.add('collapsed');
+    bubble?.classList.add('collapsed');
+    if (title) title.textContent = 'Select a friend';
+    messagesRoot.innerHTML = '<div class="social-chat-empty">Login to send direct messages.</div>';
+    if (input) {
+      input.value = '';
+      input.disabled = true;
+      input.placeholder = 'Login to message friends...';
+    }
+    syncRootWidth();
     return;
   }
   if (!conversation) {
-    root.innerHTML = '<div class="friend-empty">Open a friend chat to send direct messages.</div>';
+    directChatMinimized = false;
+    panel.classList.add('collapsed');
+    bubble?.classList.add('collapsed');
+    if (title) title.textContent = 'Select a friend';
+    messagesRoot.innerHTML = '<div class="social-chat-empty">Open a friend chat to send direct messages.</div>';
+    if (input) {
+      input.value = '';
+      input.disabled = true;
+      input.placeholder = 'Message a friend...';
+    }
+    syncRootWidth();
     return;
   }
 
-  const messages = directChatState.messages || [];
-  root.innerHTML = `
-    <div class="direct-chat-head">
-      <div class="direct-chat-title">${escape(conversation.otherUser?.username || 'Direct chat')}</div>
-      <button class="notif-action" type="button" onclick="loadDirectMessages()">REFRESH</button>
-    </div>
-    <div class="direct-chat-messages" id="directChatMessages">
-      ${messages.length ? messages.map(message => `
-        <div class="direct-msg ${message.isOwn ? 'own' : ''}">${escape(message.content)}</div>
-      `).join('') : '<div class="friend-empty">No messages yet.</div>'}
-    </div>
-    <div class="direct-chat-input">
-      <input id="directChatInput" type="text" placeholder="Message ${escape(conversation.otherUser?.username || 'friend')}..." autocomplete="off" onkeydown="handleDirectChatKey(event)" />
-      <button class="friend-action" type="button" onclick="sendDirectChatMessage()">SEND</button>
-    </div>
-  `;
+  const otherName = conversation.otherUser?.username || conversation.otherUser?.name || 'Direct chat';
+  if (directChatMinimized) {
+    panel.classList.add('collapsed');
+    if (bubble) bubble.classList.remove('collapsed');
+    if (bubbleInitial) bubbleInitial.textContent = otherName.slice(0, 1).toUpperCase();
+    if (bubbleLabel) bubbleLabel.textContent = otherName;
+    placeDirectChatBubble();
+    syncRootWidth();
+    return;
+  }
 
-  const messagesEl = document.getElementById('directChatMessages');
-  if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+  panel.classList.remove('collapsed');
+  bubble?.classList.add('collapsed');
+  placeDirectChat();
+  if (title) title.textContent = otherName;
+  if (input) {
+    input.disabled = false;
+    input.placeholder = `Message ${otherName}...`;
+  }
+
+  const messages = directChatState.messages || [];
+  messagesRoot.innerHTML = messages.length ? messages.map(message => `
+    <div class="direct-msg ${message.isOwn ? 'own' : ''}">${escape(message.content)}</div>
+  `).join('') : '<div class="social-chat-empty">No messages yet. Start the conversation from the box below.</div>';
+  messagesRoot.scrollTop = messagesRoot.scrollHeight;
+  syncRootWidth();
 }
 
 async function openDirectChat(friendId) {
@@ -1252,10 +1735,36 @@ async function openDirectChat(friendId) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not open conversation');
     directChatState.conversation = data.conversation;
+    directChatState.messages = [];
+    directChatMinimized = false;
+    document.getElementById('friendsPanel')?.classList.remove('open');
+    document.getElementById('nbCol')?.classList.add('collapsed');
+    document.getElementById('profileCol')?.classList.add('collapsed');
+    renderDirectChat();
     await loadDirectMessages();
+    document.getElementById('directChatInput')?.focus();
   } catch (e) {
     showToast(e.message || 'Could not open conversation');
   }
+}
+
+function closeDirectChat() {
+  if (directChatState.conversation) {
+    directChatMinimized = true;
+  }
+  renderDirectChat();
+}
+
+function restoreDirectChat() {
+  if (suppressDirectChatBubbleClick) {
+    suppressDirectChatBubbleClick = false;
+    return;
+  }
+  if (!directChatState.conversation) return;
+  directChatMinimized = false;
+  closeSidePanels('socialChatCol');
+  renderDirectChat();
+  document.getElementById('directChatInput')?.focus();
 }
 
 async function loadDirectMessages() {
@@ -1719,14 +2228,112 @@ function copyNote(text) {
 // Toggle notebook panel
 function toggleNotebook() {
   const col = document.getElementById('nbCol');
-  const root = document.getElementById('root');
+  if (!col) return;
   
   col.classList.toggle('collapsed');
-  
-  if (col.classList.contains('collapsed')) {
-    root.style.width = '840px';
-  } else {
-    root.style.width = '1120px';
+  if (!col.classList.contains('collapsed')) {
+    closeSidePanels('nbCol');
+  }
+  syncRootWidth();
+}
+
+function userInitial(user) {
+  const value = (user?.displayName || user?.name || user?.username || '?').trim();
+  return value ? value[0].toUpperCase() : '?';
+}
+
+function renderProfilePanel() {
+  const user = authState.user || {};
+  const preview = document.getElementById('profileAvatarPreview');
+  const name = document.getElementById('profileNamePreview');
+  const username = document.getElementById('profileUsernamePreview');
+  const displayNameInput = document.getElementById('profileDisplayName');
+  const bioInput = document.getElementById('profileBio');
+  const pictureInput = document.getElementById('profilePicture');
+  const saveBtn = document.getElementById('profileSaveBtn');
+
+  if (preview) {
+    if (authState.authenticated && user.picture && user.picture.startsWith('http')) {
+      preview.innerHTML = `<img src="${escape(user.picture)}" alt="" />`;
+    } else {
+      preview.textContent = authState.authenticated ? userInitial(user) : '?';
+    }
+  }
+  if (name) name.textContent = authState.authenticated ? (user.displayName || user.name || user.username || 'Signed in') : 'Guest';
+  if (username) username.textContent = authState.authenticated ? `@${user.username || 'local-user'}` : 'Login to edit your profile';
+  if (displayNameInput) {
+    displayNameInput.value = authState.authenticated ? (user.displayName || user.name || '') : '';
+    displayNameInput.disabled = !authState.authenticated;
+  }
+  if (bioInput) {
+    bioInput.value = authState.authenticated ? (user.bio || '') : '';
+    bioInput.disabled = !authState.authenticated;
+  }
+  if (pictureInput) {
+    pictureInput.value = authState.authenticated ? (user.picture || '') : '';
+    pictureInput.disabled = !authState.authenticated;
+  }
+  if (saveBtn) saveBtn.disabled = !authState.authenticated;
+}
+
+function toggleProfile() {
+  const col = document.getElementById('profileCol');
+  if (!col) return;
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+
+  col.classList.toggle('collapsed');
+  if (!col.classList.contains('collapsed')) {
+    closeSidePanels('profileCol');
+    renderProfilePanel();
+  }
+  syncRootWidth();
+}
+
+function applyInitialPage() {
+  const page = initialPage();
+  if (page === 'friends') {
+    document.getElementById('friendsPanel')?.classList.add('open');
+    loadFriends();
+    return;
+  }
+  if (page === 'profiles') {
+    if (!authState.authenticated) {
+      showToast('Login required');
+      return;
+    }
+    document.getElementById('profileCol')?.classList.remove('collapsed');
+    closeSidePanels('profileCol');
+    renderProfilePanel();
+    syncRootWidth();
+  }
+}
+
+async function saveProfile() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+
+  const displayName = document.getElementById('profileDisplayName')?.value.trim() || '';
+  const bio = document.getElementById('profileBio')?.value.trim() || '';
+  const picture = document.getElementById('profilePicture')?.value.trim() || '';
+
+  try {
+    const res = await authFetch(API_USER_ME, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName, bio, picture }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save profile');
+    authState.user = data.user;
+    renderAuthState();
+    showToast('Profile saved');
+  } catch (e) {
+    showToast(e.message || 'Could not save profile');
   }
 }
 
@@ -1835,7 +2442,7 @@ function renderAuthState() {
     const user = authState.user || {};
     name.textContent = user.name || user.email || 'SIGNED IN';
     btn.textContent = 'LOGOUT';
-    if (user.picture && user.picture.startsWith('https://')) {
+    if (user.picture && user.picture.startsWith('http')) {
       avatar.src = user.picture;
       avatar.style.display = '';
     } else {
@@ -1853,6 +2460,7 @@ function renderAuthState() {
     registerBtn.style.display = (!authState.authenticated && authState.registrationEnabled) ? '' : 'none';
   }
 
+  renderProfilePanel();
   syncChatControls();
 }
 
@@ -1873,6 +2481,8 @@ async function handleAuthClick() {
     notificationState = { events: [], settings: [], unreadCount: 0 };
     friendState = { friends: [], sent: [], received: [], searchResults: [] };
     directChatState = { conversation: null, messages: [] };
+    directChatMinimized = false;
+    closeToolPanels();
     renderAuthState();
     renderNotes();
     renderNotifications();
@@ -2008,6 +2618,17 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     toggleNotebook();
   }
+  if (e.key === 'Escape') {
+    closeToolPanels();
+  }
+});
+window.addEventListener('pointermove', moveDirectChat);
+window.addEventListener('pointerup', stopDirectChatDrag);
+window.addEventListener('pointercancel', stopDirectChatDrag);
+window.addEventListener('resize', () => {
+  syncRootWidth();
+  placeDirectChat();
+  placeDirectChatBubble();
 });
 
 // ── Clock ────────────────────────────────────
@@ -2017,8 +2638,10 @@ function tick() {
 
 // ── Init ─────────────────────────────────────
 async function init() {
+  syncRootWidth();
   renderChatMode();
   await loadAuthState();
+  applyInitialPage();
   await fetchPrices();
   setInterval(fetchPrices, 30000);
   tick();

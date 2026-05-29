@@ -81,6 +81,31 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("accessToken", data)
             self.assertEqual(data["user"]["username"], "newuser")
 
+    def test_user_can_update_profile(self):
+        with TestClient(self.app) as client:
+            login = client.post(
+                "/api/auth/login",
+                json={"login": "seed", "password": "password123"},
+            )
+            token = login.json()["accessToken"]
+            headers = {"Authorization": f"Bearer {token}"}
+
+            updated = client.patch(
+                "/api/users/me",
+                json={
+                    "displayName": "Seed Trader",
+                    "bio": "Macro-aware BTC and ETH watcher.",
+                    "picture": "https://example.com/avatar.png",
+                },
+                headers=headers,
+            )
+            self.assertEqual(updated.status_code, 200)
+            self.assertEqual(updated.json()["user"]["displayName"], "Seed Trader")
+            self.assertEqual(updated.json()["user"]["bio"], "Macro-aware BTC and ETH watcher.")
+
+            me = client.get("/api/auth/me", headers=headers)
+            self.assertEqual(me.json()["user"]["name"], "Seed Trader")
+
     def test_auth_pages_render_forms(self):
         with TestClient(self.app) as client:
             index = client.get("/")
@@ -88,7 +113,25 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="friendsPanel"', index.text)
             self.assertIn("API_FRIEND_REQUESTS", index.text)
             self.assertIn("API_CONVERSATIONS", index.text)
-            self.assertIn('id="directChat"', index.text)
+            self.assertIn('id="socialChatCol"', index.text)
+            self.assertIn('id="socialChatMessages"', index.text)
+            self.assertIn("startDirectChatDrag", index.text)
+            self.assertIn('id="directChatBubble"', index.text)
+            self.assertIn("restoreDirectChat", index.text)
+            self.assertIn('id="profileCol"', index.text)
+            self.assertIn("API_USER_ME", index.text)
+
+            friends = client.get("/friends")
+            self.assertEqual(friends.status_code, 200)
+            self.assertIn('data-initial-page="friends"', friends.text)
+
+            profiles = client.get("/profiles")
+            self.assertEqual(profiles.status_code, 200)
+            self.assertIn('data-initial-page="profiles"', profiles.text)
+
+            profile = client.get("/profile")
+            self.assertEqual(profile.status_code, 200)
+            self.assertIn('data-initial-page="profiles"', profile.text)
 
             login = client.get("/login")
             self.assertEqual(login.status_code, 200)
