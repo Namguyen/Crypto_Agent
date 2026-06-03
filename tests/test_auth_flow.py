@@ -20,8 +20,10 @@ class AuthFlowTest(unittest.TestCase):
         os.environ["AUTH_ALLOW_REGISTRATION"] = "true"
         os.environ["SELF_AUTH_USERNAME"] = "seed"
         os.environ["SELF_AUTH_PASSWORD"] = "password123"
+        os.environ["SELF_AUTH_IS_ADMIN"] = "true"
         os.environ["DEEPSEEK_API_KEY"] = "test"
         os.environ["UPLOAD_ROOT"] = os.path.join(cls.tmp.name, "uploads")
+        os.environ["NOTE_EMBEDDING_BACKEND"] = "hash"
 
         import app as app_module
 
@@ -253,6 +255,65 @@ class AuthFlowTest(unittest.TestCase):
         self.assertEqual(seed_notes.status_code, 200)
         self.assertEqual(seed_notes.json()["notes"][0]["content"], "seed-only datapoint")
 
+    def test_note_retrieval_is_user_scoped_and_passed_to_agent(self):
+        from backend.ai.retrieval import retrieve_user_notes
+
+        with TestClient(self.app) as client, patch("backend.app.run_agent", return_value="personalized reply") as run_agent:
+            rag_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "raguser",
+                    "email": "raguser@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(rag_register.status_code, 201)
+            rag_user = rag_register.json()["user"]
+            rag_headers = {"Authorization": f"Bearer {rag_register.json()['accessToken']}"}
+
+            rag_note = client.post(
+                "/api/notes",
+                json={"content": "rag-only BTC support at 60000, watching for rebound"},
+                headers=rag_headers,
+            )
+            self.assertEqual(rag_note.status_code, 201)
+
+            other_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "ragother",
+                    "email": "ragother@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(other_register.status_code, 201)
+            other_user = other_register.json()["user"]
+            other_headers = {"Authorization": f"Bearer {other_register.json()['accessToken']}"}
+            other_note = client.post(
+                "/api/notes",
+                json={"content": "other-only BTC liquidation note must not leak"},
+                headers=other_headers,
+            )
+            self.assertEqual(other_note.status_code, 201)
+
+            rag_results = retrieve_user_notes(rag_user["id"], "BTC support rebound", limit=4)
+            self.assertTrue(any("rag-only BTC support" in note["content"] for note in rag_results))
+            self.assertFalse(any("other-only" in note["content"] for note in rag_results))
+
+            other_results = retrieve_user_notes(other_user["id"], "BTC support rebound", limit=4)
+            self.assertTrue(any("other-only BTC liquidation" in note["content"] for note in other_results))
+            self.assertFalse(any("rag-only" in note["content"] for note in other_results))
+
+            chat = client.post(
+                "/api/chat",
+                json={"message": "What was my BTC support rebound plan?", "mode": "instant"},
+                headers=rag_headers,
+            )
+            self.assertEqual(chat.status_code, 200)
+            retrieved_notes = run_agent.call_args.kwargs["retrieved_notes"]
+            self.assertTrue(any("rag-only BTC support" in note["content"] for note in retrieved_notes))
+            self.assertFalse(any("other-only" in note["content"] for note in retrieved_notes))
+
     def test_admin_pages_and_apis(self):
         with TestClient(self.app) as client:
             login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
@@ -260,15 +321,151 @@ class AuthFlowTest(unittest.TestCase):
 
             page = client.get("/admin")
             self.assertEqual(page.status_code, 200)
-            self.assertIn("Database Users & Request Logs", page.text)
+            self.assertIn("CMS Users, Sessions & Logs", page.text)
+            self.assertIn("Admin Actions", page.text)
 
             users = client.get("/api/admin/users", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(users.status_code, 200)
             self.assertGreaterEqual(len(users.json()["users"]), 1)
+            self.assertTrue(next(user for user in users.json()["users"] if user["username"] == "seed")["isAdmin"])
 
             logs = client.get("/api/admin/request-logs", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(logs.status_code, 200)
             self.assertIn("logs", logs.json())
+
+    def test_admin_cms_user_lifecycle(self):
+        with TestClient(self.app) as client:
+            admin_login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            admin_token = admin_login.json()["accessToken"]
+            admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+            victim_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "cmsvictim",
+                    "email": "cmsvictim@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(victim_register.status_code, 201)
+            victim = victim_register.json()["user"]
+            victim_token = victim_register.json()["accessToken"]
+            victim_headers = {"Authorization": f"Bearer {victim_token}"}
+
+            non_admin = client.get("/api/admin/users", headers=victim_headers)
+            self.assertEqual(non_admin.status_code, 403)
+
+            suspend = client.post(
+                f"/api/admin/users/{victim['id']}/suspend",
+                json={"reason": "test suspension"},
+                headers=admin_headers,
+            )
+            self.assertEqual(suspend.status_code, 200)
+            self.assertTrue(suspend.json()["user"]["disabledAt"])
+
+            blocked_api = client.get("/api/notes", headers=victim_headers)
+            self.assertEqual(blocked_api.status_code, 403)
+            self.assertEqual(blocked_api.json()["error"], "Account disabled")
+
+            blocked_login = client.post("/api/auth/login", json={"login": "cmsvictim", "password": "password123"})
+            self.assertEqual(blocked_login.status_code, 403)
+
+            unsuspend = client.post(f"/api/admin/users/{victim['id']}/unsuspend", headers=admin_headers)
+            self.assertEqual(unsuspend.status_code, 200)
+            self.assertIsNone(unsuspend.json()["user"]["disabledAt"])
+
+            reset = client.post(
+                f"/api/admin/users/{victim['id']}/reset-password",
+                json={"password": "newpassword123"},
+                headers=admin_headers,
+            )
+            self.assertEqual(reset.status_code, 200)
+
+            old_login = client.post("/api/auth/login", json={"login": "cmsvictim", "password": "password123"})
+            self.assertEqual(old_login.status_code, 401)
+
+            new_login = client.post("/api/auth/login", json={"login": "cmsvictim", "password": "newpassword123"})
+            self.assertEqual(new_login.status_code, 200)
+
+            revoke = client.post(f"/api/admin/users/{victim['id']}/revoke-sessions", headers=admin_headers)
+            self.assertEqual(revoke.status_code, 200)
+            refresh_after_revoke = client.post("/api/auth/refresh")
+            self.assertEqual(refresh_after_revoke.status_code, 401)
+
+            self_delete = client.delete(f"/api/admin/users/{admin_login.json()['user']['id']}", headers=admin_headers)
+            self.assertEqual(self_delete.status_code, 400)
+
+            delete = client.delete(f"/api/admin/users/{victim['id']}", headers=admin_headers)
+            self.assertEqual(delete.status_code, 200)
+            deleted_login = client.post("/api/auth/login", json={"login": "cmsvictim", "password": "newpassword123"})
+            self.assertEqual(deleted_login.status_code, 401)
+
+            actions = client.get("/api/admin/actions", headers=admin_headers)
+            self.assertEqual(actions.status_code, 200)
+            action_names = {action["action"] for action in actions.json()["actions"]}
+            self.assertTrue({"suspend_user", "unsuspend_user", "reset_password", "revoke_sessions", "delete_user"} <= action_names)
+
+    def test_forum_topics_replies_and_ai_summary(self):
+        with TestClient(self.app) as client, patch(
+            "backend.forum.routes.summarize_forum_thread",
+            return_value=("BTC thread summary", "test-summary-model"),
+        ) as summarize:
+            page = client.get("/forum")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("Discussion Forum", page.text)
+            self.assertIn("AI summarize", page.text)
+
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+            headers = {"Authorization": f"Bearer {token}"}
+
+            unauth_topics = client.get("/api/forum/topics")
+            self.assertEqual(unauth_topics.status_code, 401)
+
+            created = client.post(
+                "/api/forum/topics",
+                json={"title": "BTC breakout setup", "body": "Watching BTC above 70000 with invalidation below 68000."},
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 201)
+            topic = created.json()["topic"]
+            self.assertEqual(topic["title"], "BTC breakout setup")
+            self.assertEqual(topic["replyCount"], 0)
+
+            reply_user = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "forumreply",
+                    "email": "forumreply@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(reply_user.status_code, 201)
+            reply_headers = {"Authorization": f"Bearer {reply_user.json()['accessToken']}"}
+
+            reply = client.post(
+                f"/api/forum/topics/{topic['id']}/posts",
+                json={"content": "I would wait for volume confirmation before chasing."},
+                headers=reply_headers,
+            )
+            self.assertEqual(reply.status_code, 201)
+            self.assertEqual(reply.json()["topic"]["replyCount"], 1)
+            self.assertEqual(reply.json()["posts"][0]["author"]["username"], "forumreply")
+
+            topics = client.get("/api/forum/topics", headers=headers)
+            self.assertEqual(topics.status_code, 200)
+            self.assertTrue(any(item["title"] == "BTC breakout setup" for item in topics.json()["topics"]))
+
+            detail = client.get(f"/api/forum/topics/{topic['id']}", headers=headers)
+            self.assertEqual(detail.status_code, 200)
+            self.assertEqual(detail.json()["posts"][0]["content"], "I would wait for volume confirmation before chasing.")
+
+            summary = client.post(f"/api/forum/topics/{topic['id']}/summary", headers=headers)
+            self.assertEqual(summary.status_code, 200)
+            self.assertEqual(summary.json()["summary"], "BTC thread summary")
+            self.assertEqual(summary.json()["model"], "test-summary-model")
+            self.assertEqual(summary.json()["topic"]["summary"], "BTC thread summary")
+            summarize.assert_called_once()
 
     def test_chat_modes_and_request_logging(self):
         with TestClient(self.app) as client, patch("backend.app.run_agent", return_value="reasoned reply") as run_agent:

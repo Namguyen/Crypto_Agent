@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forum | Crypto Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #070810;
+      color: #c8cdd8;
+      font-family: "Courier New", Courier, monospace;
+      padding: 22px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .brand {
+      color: #ef9f27;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .16em;
+    }
+    h1 { font-size: 18px; margin: 6px 0; }
+    h2 {
+      color: #ef9f27;
+      font-size: 11px;
+      letter-spacing: .12em;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .meta { color: #6b7488; font-size: 11px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; }
+    a, button {
+      color: #ef9f27;
+      background: #0f1219;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      padding: 8px 10px;
+      text-decoration: none;
+    }
+    button:hover, a:hover { border-color: rgba(239,159,39,.55); }
+    button.primary {
+      background: #ef9f27;
+      border-color: #ef9f27;
+      color: #111;
+      font-weight: 700;
+    }
+    button:disabled, input:disabled, textarea:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 420px) 1fr;
+      gap: 18px;
+    }
+    section {
+      border-top: 1px solid #1a1e28;
+      padding-top: 14px;
+      min-width: 0;
+    }
+    .card, form {
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    form { margin-bottom: 14px; }
+    label {
+      color: #6b7488;
+      display: block;
+      font-size: 10px;
+      letter-spacing: .08em;
+      margin: 10px 0 6px;
+      text-transform: uppercase;
+    }
+    input, textarea {
+      width: 100%;
+      background: #080a10;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      color: #d6dbe7;
+      font: inherit;
+      font-size: 12px;
+      padding: 10px;
+    }
+    textarea { min-height: 92px; resize: vertical; }
+    .topic {
+      border-bottom: 1px solid #1a1e28;
+      cursor: pointer;
+      padding: 11px 0;
+    }
+    .topic:last-child { border-bottom: none; }
+    .topic.active strong { color: #ef9f27; }
+    .topic strong { color: #d6dbe7; font-size: 13px; }
+    .body-text {
+      color: #d6dbe7;
+      font-size: 13px;
+      line-height: 1.55;
+      margin-top: 9px;
+      white-space: pre-wrap;
+    }
+    .post {
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      margin-top: 10px;
+      padding: 12px;
+    }
+    .summary {
+      background: rgba(239,159,39,.08);
+      border-color: rgba(239,159,39,.35);
+      margin: 12px 0;
+    }
+    .empty {
+      color: #6b7488;
+      background: #0b0d11;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 12px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    @media (max-width: 900px) {
+      body { padding: 16px; }
+      header { flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">CRYPTO AGENT_FORUM</div>
+      <h1>Discussion Forum</h1>
+      <p class="meta">Create topics, reply to other traders, and let AI summarize the thread.</p>
+    </div>
+    <div class="links">
+      <a href="/">Agent</a>
+      <a href="/friends">Friends</a>
+      <a href="/profiles">Profile</a>
+      <button onclick="refreshForum()">Refresh</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section>
+      <h2>New Topic</h2>
+      <form id="topicForm" onsubmit="createTopic(event)">
+        <label for="topicTitle">Title</label>
+        <input id="topicTitle" maxlength="120" placeholder="BTC weekend setup" required />
+        <label for="topicBody">Body</label>
+        <textarea id="topicBody" maxlength="5000" placeholder="Share your thesis, levels, risk, or question..." required></textarea>
+        <div class="actions">
+          <button class="primary" id="createTopicBtn" type="submit">Create topic</button>
+        </div>
+      </form>
+
+      <h2>Topics</h2>
+      <div id="topics"></div>
+    </section>
+
+    <section>
+      <h2>Thread</h2>
+      <div id="thread" class="empty">Select a topic to read the discussion.</div>
+    </section>
+  </main>
+
+  <script>
+    const API_AUTH_ME = '/api/auth/me';
+    const API_AUTH_REFRESH = '/api/auth/refresh';
+    const API_FORUM_TOPICS = '/api/forum/topics';
+    let accessToken = null;
+    let authState = { authenticated: false, user: null };
+    let forumState = { topics: [], selectedTopicId: null, topic: null, posts: [] };
+
+    function esc(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function fmtTime(epoch) {
+      if (!epoch) return '';
+      return new Date(epoch * 1000).toLocaleString();
+    }
+
+    async function refreshAccessToken() {
+      const res = await fetch(API_AUTH_REFRESH, { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.accessToken) return false;
+      accessToken = data.accessToken;
+      return true;
+    }
+
+    async function authFetch(url, options = {}, retry = true) {
+      const headers = { ...(options.headers || {}) };
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+      if (res.status === 401 && retry && await refreshAccessToken()) return authFetch(url, options, false);
+      return res;
+    }
+
+    async function loadAuth() {
+      await refreshAccessToken();
+      const res = await authFetch(API_AUTH_ME, {}, false);
+      const data = await res.json().catch(() => ({}));
+      authState = { authenticated: Boolean(data.authenticated), user: data.user || null };
+      document.getElementById('createTopicBtn').disabled = !authState.authenticated;
+      document.getElementById('topicTitle').disabled = !authState.authenticated;
+      document.getElementById('topicBody').disabled = !authState.authenticated;
+    }
+
+    function renderTopics() {
+      const root = document.getElementById('topics');
+      if (!authState.authenticated) {
+        root.innerHTML = '<div class="empty">Login to view and create forum topics.</div>';
+        return;
+      }
+      if (!forumState.topics.length) {
+        root.innerHTML = '<div class="empty">No forum topics yet. Start the first discussion.</div>';
+        return;
+      }
+      root.innerHTML = `<div class="card">${forumState.topics.map(topic => `
+        <div class="topic ${String(topic.id) === String(forumState.selectedTopicId) ? 'active' : ''}" onclick="selectTopic('${esc(topic.id)}')">
+          <strong>${esc(topic.title)}</strong>
+          <div class="meta">by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} · ${esc(topic.replyCount)} replies</div>
+          <div class="meta">${fmtTime(topic.lastPostAt)}</div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function renderThread() {
+      const root = document.getElementById('thread');
+      const topic = forumState.topic;
+      if (!authState.authenticated) {
+        root.className = 'empty';
+        root.innerHTML = 'Login to read the forum.';
+        return;
+      }
+      if (!topic) {
+        root.className = 'empty';
+        root.innerHTML = 'Select a topic to read the discussion.';
+        return;
+      }
+      root.className = '';
+      root.innerHTML = `
+        <div class="card">
+          <h1>${esc(topic.title)}</h1>
+          <div class="meta">Started by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} · ${fmtTime(topic.createdAt)}</div>
+          <div class="body-text">${esc(topic.body)}</div>
+          <div class="actions">
+            <button onclick="summarizeTopic('${esc(topic.id)}')">AI summarize</button>
+          </div>
+        </div>
+        ${topic.summary ? `
+          <div class="card summary">
+            <h2>AI Summary</h2>
+            <div class="body-text">${esc(topic.summary)}</div>
+            <div class="meta">${esc(topic.summaryModel || '')} · ${fmtTime(topic.summaryUpdatedAt)}</div>
+          </div>` : ''}
+        <div id="posts">
+          ${forumState.posts.length ? forumState.posts.map(post => `
+            <div class="post">
+              <div class="meta">${esc(post.author?.displayName || post.author?.username || 'unknown')} · ${fmtTime(post.createdAt)}</div>
+              <div class="body-text">${esc(post.content)}</div>
+            </div>
+          `).join('') : '<div class="empty" style="margin-top:10px;">No replies yet.</div>'}
+        </div>
+        <form id="replyForm" onsubmit="createReply(event)">
+          <label for="replyBody">Reply</label>
+          <textarea id="replyBody" maxlength="5000" placeholder="Add to the discussion..." required></textarea>
+          <div class="actions">
+            <button class="primary" type="submit">Post reply</button>
+          </div>
+        </form>`;
+    }
+
+    async function refreshForum() {
+      await loadAuth();
+      if (!authState.authenticated) {
+        renderTopics();
+        renderThread();
+        return;
+      }
+      const res = await authFetch(API_FORUM_TOPICS);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        document.getElementById('topics').innerHTML = `<div class="empty">${esc(data.error || 'Could not load topics')}</div>`;
+        return;
+      }
+      forumState.topics = data.topics || [];
+      if (!forumState.selectedTopicId && forumState.topics[0]) {
+        forumState.selectedTopicId = forumState.topics[0].id;
+      }
+      renderTopics();
+      if (forumState.selectedTopicId) await loadTopic(forumState.selectedTopicId);
+      else renderThread();
+    }
+
+    async function selectTopic(topicId) {
+      forumState.selectedTopicId = topicId;
+      renderTopics();
+      await loadTopic(topicId);
+    }
+
+    async function loadTopic(topicId) {
+      const res = await authFetch(`${API_FORUM_TOPICS}/${encodeURIComponent(topicId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        forumState.topic = null;
+        forumState.posts = [];
+        renderThread();
+        return;
+      }
+      forumState.topic = data.topic;
+      forumState.posts = data.posts || [];
+      renderThread();
+    }
+
+    async function createTopic(event) {
+      event.preventDefault();
+      const title = document.getElementById('topicTitle').value.trim();
+      const body = document.getElementById('topicBody').value.trim();
+      if (!title || !body) return;
+      const res = await authFetch(API_FORUM_TOPICS, {
+        method: 'POST',
+        body: JSON.stringify({ title, body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || data.detail?.[0]?.msg || 'Could not create topic');
+        return;
+      }
+      document.getElementById('topicForm').reset();
+      forumState.selectedTopicId = data.topic.id;
+      await refreshForum();
+    }
+
+    async function createReply(event) {
+      event.preventDefault();
+      const body = document.getElementById('replyBody').value.trim();
+      if (!body || !forumState.topic) return;
+      const res = await authFetch(`${API_FORUM_TOPICS}/${encodeURIComponent(forumState.topic.id)}/posts`, {
+        method: 'POST',
+        body: JSON.stringify({ content: body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || data.detail?.[0]?.msg || 'Could not post reply');
+        return;
+      }
+      forumState.topic = data.topic;
+      forumState.posts = data.posts || [];
+      renderThread();
+      await refreshForum();
+    }
+
+    async function summarizeTopic(topicId) {
+      const res = await authFetch(`${API_FORUM_TOPICS}/${encodeURIComponent(topicId)}/summary`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Could not summarize topic');
+        return;
+      }
+      forumState.topic = data.topic;
+      renderThread();
+      await refreshForum();
+    }
+
+    refreshForum();
+  </script>
+{% include "partials/dev_live_reload.html" %}
+</body>
+</html>

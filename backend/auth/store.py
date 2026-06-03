@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import time
@@ -42,6 +43,9 @@ def init_auth_db() -> None:
                 display_name TEXT,
                 bio TEXT,
                 picture TEXT,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                disabled_at INTEGER,
+                disabled_reason TEXT,
                 password_hash TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
@@ -76,6 +80,22 @@ def init_auth_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_notes_user_id_created_at
                 ON notes(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS note_embeddings (
+                note_id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                model TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                dimension INTEGER NOT NULL,
+                vector BLOB NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_note_embeddings_user_id
+                ON note_embeddings(user_id);
 
             CREATE TABLE IF NOT EXISTS user_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,11 +147,28 @@ def init_auth_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_notification_events_user_created_at
                 ON notification_events(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS admin_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER,
+                target_user_id INTEGER,
+                action TEXT NOT NULL,
+                details TEXT,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(admin_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at
+                ON admin_actions(created_at DESC);
             """
         )
         ensure_column(conn, "users", "display_name", "TEXT")
         ensure_column(conn, "users", "bio", "TEXT")
         ensure_column(conn, "users", "picture", "TEXT")
+        ensure_column(conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "users", "disabled_at", "INTEGER")
+        ensure_column(conn, "users", "disabled_reason", "TEXT")
         ensure_column(conn, "user_requests", "mode", "TEXT NOT NULL DEFAULT 'instant'")
         ensure_column(conn, "user_requests", "model", "TEXT")
 
@@ -151,6 +188,7 @@ def public_user(row: sqlite3.Row | dict) -> dict:
     display_name = (row["display_name"] if "display_name" in row.keys() else "") or row["username"]
     picture = (row["picture"] if "picture" in row.keys() else "") or ""
     bio = (row["bio"] if "bio" in row.keys() else "") or ""
+    disabled_at = row["disabled_at"] if "disabled_at" in row.keys() else None
     return {
         "id": str(row["id"]),
         "username": row["username"],
@@ -159,24 +197,28 @@ def public_user(row: sqlite3.Row | dict) -> dict:
         "displayName": display_name,
         "bio": bio,
         "picture": picture,
+        "isAdmin": bool(row["is_admin"] if "is_admin" in row.keys() else 0),
+        "disabledAt": int(disabled_at) if disabled_at else None,
+        "disabledReason": (row["disabled_reason"] if "disabled_reason" in row.keys() else "") or "",
         "email_verified": bool(row["email"]),
         "provider": "local",
     }
 
 
-def create_user(username: str, email: Optional[str], password: str) -> dict:
+def create_user(username: str, email: Optional[str], password: str, is_admin: bool = False) -> dict:
     now = int(time.time())
     try:
         with auth_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO users (username, email, password_hash, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     username.strip(),
                     normalize_email(email),
                     generate_password_hash(password),
+                    1 if is_admin else 0,
                     now,
                     now,
                 ),
@@ -214,7 +256,12 @@ def verify_user_password(login: str, password: str) -> Optional[dict]:
     return public_user(row)
 
 
-def upsert_env_user(username: str, password: str, email: Optional[str] = None) -> dict:
+def upsert_env_user(
+    username: str,
+    password: str,
+    email: Optional[str] = None,
+    is_admin: bool = False,
+) -> dict:
     now = int(time.time())
     existing = find_user_by_login(username)
     normalized_email = normalize_email(email)
@@ -225,18 +272,22 @@ def upsert_env_user(username: str, password: str, email: Optional[str] = None) -
                 UPDATE users
                 SET email = COALESCE(?, email),
                     password_hash = ?,
+                    is_admin = ?,
+                    disabled_at = NULL,
+                    disabled_reason = NULL,
                     updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     normalized_email,
                     generate_password_hash(password),
+                    1 if is_admin else 0,
                     now,
                     existing["id"],
                 ),
             )
         return get_user_by_id(existing["id"])
-    return create_user(username, normalized_email, password)
+    return create_user(username, normalized_email, password, is_admin=is_admin)
 
 
 def store_refresh_token(
@@ -339,6 +390,56 @@ def create_note(user_id: int | str, content: str) -> dict:
     return public_note(row)
 
 
+def list_notes_for_retrieval(user_id: int | str) -> list[dict]:
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                n.id,
+                n.user_id,
+                n.content,
+                n.created_at,
+                ne.model,
+                ne.content_hash,
+                ne.dimension,
+                ne.vector
+            FROM notes n
+            LEFT JOIN note_embeddings ne ON ne.note_id = n.id AND ne.user_id = n.user_id
+            WHERE n.user_id = ?
+            ORDER BY n.created_at DESC, n.id DESC
+            """,
+            (str(user_id),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def upsert_note_embedding(
+    user_id: int | str,
+    note_id: int | str,
+    model: str,
+    content_hash: str,
+    dimension: int,
+    vector: bytes,
+) -> None:
+    now = int(time.time())
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO note_embeddings
+                (note_id, user_id, model, content_hash, dimension, vector, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(note_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                model = excluded.model,
+                content_hash = excluded.content_hash,
+                dimension = excluded.dimension,
+                vector = excluded.vector,
+                updated_at = excluded.updated_at
+            """,
+            (str(note_id), str(user_id), model, content_hash, int(dimension), vector, now, now),
+        )
+
+
 def delete_note(user_id: int | str, note_id: int | str) -> None:
     with auth_connection() as conn:
         conn.execute(
@@ -377,37 +478,209 @@ def log_user_request(
         )
 
 
+def admin_user_summary(row: sqlite3.Row | dict) -> dict:
+    disabled_at = row["disabled_at"] if "disabled_at" in row.keys() else None
+    return {
+        "id": str(row["id"]),
+        "username": row["username"],
+        "email": row["email"] or "",
+        "displayName": (row["display_name"] if "display_name" in row.keys() else "") or row["username"],
+        "isAdmin": bool(row["is_admin"] if "is_admin" in row.keys() else 0),
+        "disabledAt": int(disabled_at) if disabled_at else None,
+        "disabledReason": (row["disabled_reason"] if "disabled_reason" in row.keys() else "") or "",
+        "createdAt": int(row["created_at"]),
+        "updatedAt": int(row["updated_at"]),
+        "notesCount": int(row["notes_count"] if "notes_count" in row.keys() else 0),
+        "requestsCount": int(row["requests_count"] if "requests_count" in row.keys() else 0),
+        "friendsCount": int(row["friends_count"] if "friends_count" in row.keys() else 0),
+        "messagesCount": int(row["messages_count"] if "messages_count" in row.keys() else 0),
+    }
+
+
+def get_admin_user(user_id: int | str) -> Optional[dict]:
+    with auth_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                u.*,
+                (SELECT COUNT(*) FROM notes n WHERE n.user_id = u.id) AS notes_count,
+                (SELECT COUNT(*) FROM user_requests ur WHERE ur.user_id = u.id) AS requests_count,
+                (SELECT COUNT(*) FROM friendships f WHERE f.user_a_id = u.id OR f.user_b_id = u.id) AS friends_count,
+                (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id) AS messages_count
+            FROM users u
+            WHERE u.id = ?
+            """,
+            (str(user_id),),
+        ).fetchone()
+    return admin_user_summary(row) if row else None
+
+
 def list_admin_users() -> list[dict]:
     with auth_connection() as conn:
         rows = conn.execute(
             """
             SELECT
-                u.id,
-                u.username,
-                u.email,
-                u.created_at,
-                u.updated_at,
-                COUNT(DISTINCT n.id) AS notes_count,
-                COUNT(DISTINCT ur.id) AS requests_count
+                u.*,
+                (SELECT COUNT(*) FROM notes n WHERE n.user_id = u.id) AS notes_count,
+                (SELECT COUNT(*) FROM user_requests ur WHERE ur.user_id = u.id) AS requests_count,
+                (SELECT COUNT(*) FROM friendships f WHERE f.user_a_id = u.id OR f.user_b_id = u.id) AS friends_count,
+                (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id) AS messages_count
             FROM users u
-            LEFT JOIN notes n ON n.user_id = u.id
-            LEFT JOIN user_requests ur ON ur.user_id = u.id
-            GROUP BY u.id
             ORDER BY u.created_at DESC
             """
         ).fetchall()
-    return [
-        {
-            "id": str(row["id"]),
-            "username": row["username"],
-            "email": row["email"] or "",
-            "createdAt": int(row["created_at"]),
-            "updatedAt": int(row["updated_at"]),
-            "notesCount": int(row["notes_count"]),
-            "requestsCount": int(row["requests_count"]),
-        }
-        for row in rows
-    ]
+    return [admin_user_summary(row) for row in rows]
+
+
+def log_admin_action(
+    admin_user_id: int | str | None,
+    target_user_id: int | str | None,
+    action: str,
+    details: dict | str | None = None,
+) -> dict:
+    now = int(time.time())
+    if isinstance(details, dict):
+        details_value = json.dumps(details, sort_keys=True)
+    else:
+        details_value = details or ""
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO admin_actions (admin_user_id, target_user_id, action, details, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                str(admin_user_id) if admin_user_id is not None else None,
+                str(target_user_id) if target_user_id is not None else None,
+                action,
+                details_value,
+                now,
+            ),
+        )
+        row = conn.execute(
+            """
+            SELECT
+                aa.*,
+                admin.username AS admin_username,
+                target.username AS target_username
+            FROM admin_actions aa
+            LEFT JOIN users admin ON admin.id = aa.admin_user_id
+            LEFT JOIN users target ON target.id = aa.target_user_id
+            WHERE aa.id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+    return public_admin_action(row)
+
+
+def public_admin_action(row: sqlite3.Row | dict) -> dict:
+    return {
+        "id": str(row["id"]),
+        "adminUserId": str(row["admin_user_id"]) if row["admin_user_id"] else "",
+        "adminUsername": row["admin_username"] or "deleted-admin",
+        "targetUserId": str(row["target_user_id"]) if row["target_user_id"] else "",
+        "targetUsername": row["target_username"] or "",
+        "action": row["action"],
+        "details": row["details"] or "",
+        "createdAt": int(row["created_at"]),
+    }
+
+
+def list_admin_actions(limit: int = 100) -> list[dict]:
+    safe_limit = max(1, min(int(limit or 100), 500))
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                aa.*,
+                admin.username AS admin_username,
+                target.username AS target_username
+            FROM admin_actions aa
+            LEFT JOIN users admin ON admin.id = aa.admin_user_id
+            LEFT JOIN users target ON target.id = aa.target_user_id
+            ORDER BY aa.created_at DESC, aa.id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return [public_admin_action(row) for row in rows]
+
+
+def revoke_refresh_tokens_for_user(user_id: int | str) -> int:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE refresh_tokens
+            SET revoked_at = COALESCE(revoked_at, ?)
+            WHERE user_id = ? AND revoked_at IS NULL
+            """,
+            (now, str(user_id)),
+        )
+    return cursor.rowcount
+
+
+def reset_user_password(user_id: int | str, password: str) -> Optional[dict]:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE users
+            SET password_hash = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (generate_password_hash(password), now, str(user_id)),
+        )
+    if cursor.rowcount < 1:
+        return None
+    revoke_refresh_tokens_for_user(user_id)
+    return get_admin_user(user_id)
+
+
+def suspend_user(user_id: int | str, reason: str = "") -> Optional[dict]:
+    now = int(time.time())
+    clean_reason = (reason or "").strip()[:500]
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE users
+            SET disabled_at = COALESCE(disabled_at, ?),
+                disabled_reason = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, clean_reason or None, now, str(user_id)),
+        )
+    if cursor.rowcount < 1:
+        return None
+    revoke_refresh_tokens_for_user(user_id)
+    return get_admin_user(user_id)
+
+
+def unsuspend_user(user_id: int | str) -> Optional[dict]:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE users
+            SET disabled_at = NULL,
+                disabled_reason = NULL,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, str(user_id)),
+        )
+    return get_admin_user(user_id) if cursor.rowcount else None
+
+
+def delete_user_by_id(user_id: int | str) -> Optional[dict]:
+    target = get_admin_user(user_id)
+    if not target:
+        return None
+    with auth_connection() as conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (str(user_id),))
+    return target
 
 
 def list_admin_request_logs(limit: int = 100) -> list[dict]:

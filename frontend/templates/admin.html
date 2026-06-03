@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin | Crypto Agent</title>
+  <title>Admin CMS | Crypto Agent</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -26,7 +26,7 @@
       font-weight: 600;
       letter-spacing: .16em;
     }
-    .links { display: flex; gap: 12px; align-items: center; }
+    .links, .user-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     a, button {
       color: #ef9f27;
       background: #0f1219;
@@ -39,9 +39,11 @@
       text-decoration: none;
     }
     button:hover, a:hover { border-color: rgba(239,159,39,.55); }
+    button.danger { color: #ff7b8a; }
+    button.safe { color: #68d391; }
     .grid {
       display: grid;
-      grid-template-columns: minmax(260px, 360px) 1fr;
+      grid-template-columns: minmax(520px, 1.15fr) minmax(320px, .85fr);
       gap: 18px;
     }
     section {
@@ -49,6 +51,7 @@
       padding-top: 14px;
       min-width: 0;
     }
+    .wide { grid-column: 1 / -1; }
     h1 { font-size: 17px; margin-bottom: 6px; }
     h2 {
       color: #ef9f27;
@@ -86,6 +89,17 @@
     }
     .status-ok { color: #4a9e6a; }
     .status-error { color: #d35d6e; }
+    .pill {
+      display: inline-block;
+      border: 1px solid #1e2330;
+      border-radius: 999px;
+      color: #6b7488;
+      font-size: 10px;
+      margin: 0 4px 5px 0;
+      padding: 3px 7px;
+    }
+    .pill.admin { color: #ef9f27; border-color: rgba(239,159,39,.45); }
+    .pill.disabled { color: #ff7b8a; border-color: rgba(255,123,138,.45); }
     .empty {
       color: #6b7488;
       background: #0b0d11;
@@ -93,9 +107,10 @@
       padding: 16px;
       font-size: 12px;
     }
-    @media (max-width: 900px) {
+    @media (max-width: 1000px) {
       body { padding: 16px; }
       .grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -104,8 +119,8 @@
   <header>
     <div>
       <div class="brand">CRYPTO AGENT_ADMIN</div>
-      <h1>Database Users & Request Logs</h1>
-      <p class="meta">Sensitive password and token hashes are never shown here.</p>
+      <h1>CMS Users, Sessions & Logs</h1>
+      <p class="meta">Password and token hashes are never shown. Dangerous actions are recorded in the audit log.</p>
     </div>
     <div class="links">
       <a href="/">App</a>
@@ -115,13 +130,17 @@
   </header>
 
   <main class="grid">
-    <section>
+    <section class="wide">
       <h2>Users</h2>
       <div id="users"></div>
     </section>
     <section>
       <h2>Request Logs</h2>
       <div id="logs"></div>
+    </section>
+    <section>
+      <h2>Admin Actions</h2>
+      <div id="actions"></div>
     </section>
   </main>
 
@@ -149,12 +168,22 @@
       return true;
     }
 
-    async function adminFetch(url, retry = true) {
-      const headers = {};
+    async function adminFetch(url, options = {}, retry = true) {
+      const headers = { ...(options.headers || {}) };
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-      const res = await fetch(url, { headers, credentials: 'same-origin' });
-      if (res.status === 401 && retry && await refreshAccessToken()) return adminFetch(url, false);
+      if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+      if (res.status === 401 && retry && await refreshAccessToken()) return adminFetch(url, options, false);
       return res;
+    }
+
+    function counts(u) {
+      return [
+        `Notes ${u.notesCount ?? 0}`,
+        `Requests ${u.requestsCount ?? 0}`,
+        `Friends ${u.friendsCount ?? 0}`,
+        `Messages ${u.messagesCount ?? 0}`,
+      ].map(esc).join('<br>');
     }
 
     function renderUsers(users) {
@@ -165,7 +194,7 @@
       }
       root.innerHTML = `
         <table>
-          <thead><tr><th>ID</th><th>User</th><th>Notes</th><th>Requests</th></tr></thead>
+          <thead><tr><th>ID</th><th>User</th><th>Status</th><th>Counts</th><th>Actions</th></tr></thead>
           <tbody>${users.map(u => `
             <tr>
               <td>${esc(u.id)}</td>
@@ -174,8 +203,22 @@
                 <span class="meta">${esc(u.email || 'no email')}</span><br>
                 <span class="meta">${fmtTime(u.createdAt)}</span>
               </td>
-              <td>${esc(u.notesCount)}</td>
-              <td>${esc(u.requestsCount)}</td>
+              <td>
+                ${u.isAdmin ? '<span class="pill admin">ADMIN</span>' : '<span class="pill">USER</span>'}
+                ${u.disabledAt ? '<span class="pill disabled">SUSPENDED</span>' : '<span class="pill">ACTIVE</span>'}<br>
+                <span class="meta">${u.disabledAt ? `${fmtTime(u.disabledAt)} ${esc(u.disabledReason || '')}` : 'Login allowed'}</span>
+              </td>
+              <td>${counts(u)}</td>
+              <td>
+                <div class="user-actions">
+                  <button onclick="resetPassword('${esc(u.id)}', '${esc(u.username)}')">Reset password</button>
+                  ${u.disabledAt
+                    ? `<button class="safe" onclick="unsuspendUser('${esc(u.id)}', '${esc(u.username)}')">Unsuspend</button>`
+                    : `<button class="danger" onclick="suspendUser('${esc(u.id)}', '${esc(u.username)}')">Suspend</button>`}
+                  <button onclick="revokeSessions('${esc(u.id)}', '${esc(u.username)}')">Revoke sessions</button>
+                  <button class="danger" onclick="deleteUser('${esc(u.id)}', '${esc(u.username)}')">Delete</button>
+                </div>
+              </td>
             </tr>`).join('')}</tbody>
         </table>`;
     }
@@ -202,17 +245,100 @@
         </table>`;
     }
 
+    function renderActions(actions) {
+      const root = document.getElementById('actions');
+      if (!actions.length) {
+        root.innerHTML = '<div class="empty">No admin actions yet.</div>';
+        return;
+      }
+      root.innerHTML = `
+        <table>
+          <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+          <tbody>${actions.map(a => `
+            <tr>
+              <td>${fmtTime(a.createdAt)}</td>
+              <td>${esc(a.adminUsername)}</td>
+              <td>${esc(a.action)}</td>
+              <td>${esc(a.targetUsername || a.targetUserId || '')}</td>
+              <td class="truncate" title="${esc(a.details)}">${esc(a.details)}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    async function handleActionResponse(res, label) {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || data.detail?.error || `${label} failed`);
+        return false;
+      }
+      await refreshAll();
+      return true;
+    }
+
+    async function resetPassword(id, username) {
+      const password = prompt(`New password for ${username} (min 8 chars):`);
+      if (password === null) return;
+      if (password.length < 8) {
+        alert('Password must be at least 8 characters.');
+        return;
+      }
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      await handleActionResponse(res, 'Password reset');
+    }
+
+    async function suspendUser(id, username) {
+      const reason = prompt(`Suspend ${username}. Reason:`, 'Admin action');
+      if (reason === null) return;
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(id)}/suspend`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+      await handleActionResponse(res, 'Suspend');
+    }
+
+    async function unsuspendUser(id, username) {
+      if (!confirm(`Unsuspend ${username}?`)) return;
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(id)}/unsuspend`, { method: 'POST' });
+      await handleActionResponse(res, 'Unsuspend');
+    }
+
+    async function revokeSessions(id, username) {
+      if (!confirm(`Revoke all refresh sessions for ${username}?`)) return;
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(id)}/revoke-sessions`, { method: 'POST' });
+      await handleActionResponse(res, 'Revoke sessions');
+    }
+
+    async function deleteUser(id, username) {
+      if (!confirm(`Hard delete ${username}? This removes their account and related rows.`)) return;
+      const typed = prompt(`Type DELETE ${username} to confirm:`);
+      if (typed !== `DELETE ${username}`) return;
+      const res = await adminFetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await handleActionResponse(res, 'Delete user');
+    }
+
     async function refreshAll() {
       const usersRes = await adminFetch('/api/admin/users');
       const logsRes = await adminFetch('/api/admin/request-logs?limit=100');
-      if (usersRes.status === 401 || logsRes.status === 401) {
+      const actionsRes = await adminFetch('/api/admin/actions?limit=100');
+      if ([usersRes, logsRes, actionsRes].some(res => res.status === 401)) {
         window.location.href = '/login';
+        return;
+      }
+      if ([usersRes, logsRes, actionsRes].some(res => res.status === 403)) {
+        document.getElementById('users').innerHTML = '<div class="empty">Admin access required.</div>';
+        document.getElementById('logs').innerHTML = '';
+        document.getElementById('actions').innerHTML = '';
         return;
       }
       const usersData = await usersRes.json();
       const logsData = await logsRes.json();
+      const actionsData = await actionsRes.json();
       renderUsers(usersData.users || []);
       renderLogs(logsData.logs || []);
+      renderActions(actionsData.actions || []);
     }
 
     refreshAccessToken().finally(refreshAll);

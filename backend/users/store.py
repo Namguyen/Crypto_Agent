@@ -30,6 +30,7 @@ def search_public_users(query: str, current_user_id: int | str, limit: int = 10)
             FROM users
             WHERE id != ?
               AND username LIKE ? COLLATE NOCASE
+              AND disabled_at IS NULL
             ORDER BY
               CASE WHEN username = ? COLLATE NOCASE THEN 0 ELSE 1 END,
               username COLLATE NOCASE
@@ -43,7 +44,7 @@ def search_public_users(query: str, current_user_id: int | str, limit: int = 10)
 def get_public_user_profile(user_id: int | str) -> dict | None:
     with auth_connection() as conn:
         row = conn.execute(
-            "SELECT id, username, display_name, bio, picture FROM users WHERE id = ?",
+            "SELECT id, username, display_name, bio, picture FROM users WHERE id = ? AND disabled_at IS NULL",
             (str(user_id),),
         ).fetchone()
     return public_user_profile(row) if row else None
@@ -59,8 +60,9 @@ def get_public_user_profile_by_ref(user_ref: str) -> dict | None:
             """
             SELECT id, username, display_name, bio, picture
             FROM users
-            WHERE id = ?
-               OR username = ? COLLATE NOCASE
+            WHERE (id = ?
+               OR username = ? COLLATE NOCASE)
+              AND disabled_at IS NULL
             """,
             (value, value),
         ).fetchone()

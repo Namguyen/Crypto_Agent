@@ -68,6 +68,25 @@ Do not answer questions unrelated to crypto; avoid politics, religion, violence,
 If asked about your internal workflow or how you operate, do not explain it. Ask the user another crypto-related question instead."""
 
 
+def format_retrieved_notes(retrieved_notes: list[dict] | None) -> str:
+    notes = retrieved_notes or []
+    if not notes:
+        return ""
+
+    lines = [
+        "Relevant private notes retrieved for this user:",
+        "Use these notes only when they help answer the user's crypto question. "
+        "Treat them as user-provided context, not verified market data. "
+        "When you rely on a note, cite it inline as [note:<id>].",
+    ]
+    for note in notes:
+        content = " ".join((note.get("content") or "").split())
+        if len(content) > 600:
+            content = content[:597].rstrip() + "..."
+        lines.append(f"- [note:{note.get('id')}] {content}")
+    return "\n".join(lines)
+
+
 def normalize_chat_mode(mode: str | None) -> str:
     value = (mode or "instant").strip().lower()
     return value if value in CHAT_MODES else "instant"
@@ -86,7 +105,41 @@ def chat_mode_options() -> list[dict]:
     ]
 
 
-def final_answer_without_tools(conversation: list, config: ChatModeConfig) -> str:
+def summarize_forum_thread(topic: dict, posts: list[dict]) -> tuple[str, str]:
+    """Generate a concise forum thread summary without tool calls."""
+    config = CHAT_MODES["instant"]
+    lines = [
+        f"Topic: {topic.get('title', '')}",
+        f"Original post by {topic.get('author', {}).get('username', 'unknown')}: {topic.get('body', '')}",
+    ]
+    for post in posts[:40]:
+        author = post.get("author", {}).get("username", "unknown")
+        content = " ".join((post.get("content") or "").split())
+        if len(content) > 700:
+            content = content[:697].rstrip() + "..."
+        lines.append(f"Reply by {author}: {content}")
+
+    response = client.chat.completions.create(
+        model=config.model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    f"{SYSTEM_PROMPT}\n\nSummarize this crypto forum discussion for users. "
+                    "Use 3-5 concise bullets. Include the main consensus, useful trade ideas, "
+                    "risks or disagreements, and open questions. Do not invent market data."
+                ),
+            },
+            {"role": "user", "content": "\n\n".join(lines)},
+        ],
+        max_tokens=min(config.max_tokens, 500),
+        stream=False,
+    )
+    return response.choices[0].message.content or "No summary available.", config.model
+
+
+def final_answer_without_tools(conversation: list, config: ChatModeConfig, note_context: str = "") -> str:
+    context_suffix = f"\n\n{note_context}" if note_context else ""
     response = client.chat.completions.create(
         model=config.model,
         messages=[
@@ -96,6 +149,7 @@ def final_answer_without_tools(conversation: list, config: ChatModeConfig) -> st
                     f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
                     "Do not call tools in this response. Use the conversation and any tool results already available. "
                     "If live data is missing, say that briefly and give a useful answer from available context."
+                    f"{context_suffix}"
                 ),
             }
         ]
@@ -106,9 +160,16 @@ def final_answer_without_tools(conversation: list, config: ChatModeConfig) -> st
     return response.choices[0].message.content or "No response."
 
 
-def run_agent(user_input: str, conversation: list, mode: str = "instant") -> str:
+def run_agent(
+    user_input: str,
+    conversation: list,
+    mode: str = "instant",
+    retrieved_notes: list[dict] | None = None,
+) -> str:
     """Execute the crypto assistant with mode-specific model and tool settings."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
+    note_context = format_retrieved_notes(retrieved_notes)
+    context_suffix = f"\n\n{note_context}" if note_context else ""
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
 
@@ -118,7 +179,10 @@ def run_agent(user_input: str, conversation: list, mode: str = "instant") -> str
             messages=[
                 {
                     "role": "system",
-                    "content": f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. {config.system_guidance}",
+                    "content": (
+                        f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
+                        f"{config.system_guidance}{context_suffix}"
+                    ),
                 }
             ]
             + conversation,
@@ -132,7 +196,7 @@ def run_agent(user_input: str, conversation: list, mode: str = "instant") -> str
 
         if msg.tool_calls:
             if tool_rounds >= config.max_tool_rounds:
-                final = final_answer_without_tools(conversation, config)
+                final = final_answer_without_tools(conversation, config, note_context)
                 conversation.append({"role": "assistant", "content": final})
                 return final
 

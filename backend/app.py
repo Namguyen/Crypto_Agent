@@ -20,33 +20,44 @@ except Exception:  # pragma: no cover - helpful error when dependency missing
     jwt = None
 
 from backend.ai.agent import CHAT_MODES, chat_mode_options, normalize_chat_mode, run_agent
+from backend.ai.retrieval import index_note_for_user, retrieve_user_notes
 from backend.auth.store import (
     cleanup_expired_refresh_tokens,
     create_note,
     create_user,
+    delete_user_by_id,
     delete_all_notes,
     delete_note,
     get_refresh_token,
+    get_admin_user,
     get_user_by_id,
     init_auth_db,
     active_notification_settings,
+    list_admin_actions,
     create_notification_event,
     list_notification_events,
     list_notification_settings,
     list_admin_request_logs,
     list_admin_users,
     list_notes,
+    log_admin_action,
     log_user_request,
     mark_notifications_read,
+    reset_user_password,
     revoke_refresh_token,
+    revoke_refresh_tokens_for_user,
     store_refresh_token,
+    suspend_user,
     unread_notification_count,
+    unsuspend_user,
     update_notification_setting,
     upsert_env_user,
     verify_user_password,
 )
 from backend.chat.routes import router as chat_router
 from backend.chat.store import init_chat_db
+from backend.forum.routes import router as forum_router
+from backend.forum.store import init_forum_db
 from backend.social.routes import router as social_router
 from backend.social.store import init_social_db
 from backend.users.routes import router as users_router
@@ -63,6 +74,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
 app.include_router(users_router)
 app.include_router(social_router)
 app.include_router(chat_router)
+app.include_router(forum_router)
 
 APP_SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or secrets.token_hex(32)
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or APP_SECRET_KEY
@@ -83,6 +95,7 @@ REFRESH_COOKIE_PATH = "/api/auth"
 SELF_AUTH_USERNAME = os.getenv("SELF_AUTH_USERNAME")
 SELF_AUTH_PASSWORD = os.getenv("SELF_AUTH_PASSWORD")
 SELF_AUTH_EMAIL = os.getenv("SELF_AUTH_EMAIL")
+SELF_AUTH_IS_ADMIN = os.getenv("SELF_AUTH_IS_ADMIN", "true").lower() in {"1", "true", "yes", "on"}
 DEV_LIVE_RELOAD = os.getenv("DEV_LIVE_RELOAD", "true").lower() in {"1", "true", "yes", "on"}
 DEV_RELOAD_EXTENSIONS = {".py", ".html", ".css", ".js"}
 DEV_RELOAD_PATHS = [
@@ -95,9 +108,10 @@ dev_reload_cache = {"checked_at": 0.0, "version": "0"}
 init_auth_db()
 init_social_db()
 init_chat_db()
+init_forum_db()
 cleanup_expired_refresh_tokens()
 if SELF_AUTH_USERNAME and SELF_AUTH_PASSWORD:
-    upsert_env_user(SELF_AUTH_USERNAME, SELF_AUTH_PASSWORD, SELF_AUTH_EMAIL)
+    upsert_env_user(SELF_AUTH_USERNAME, SELF_AUTH_PASSWORD, SELF_AUTH_EMAIL, is_admin=SELF_AUTH_IS_ADMIN)
 
 conversation_histories = {}
 
@@ -186,6 +200,8 @@ def decode_access_token(token: str) -> dict:
     user = get_user_by_id(payload.get("sub"))
     if not user:
         raise jwt.InvalidTokenError("User no longer exists")
+    if user.get("disabledAt"):
+        raise jwt.InvalidTokenError("Account disabled")
     return user
 
 
@@ -272,8 +288,9 @@ def authenticate_request(request: Request) -> tuple[Optional[dict], Optional[str
             return user, None
         except jwt.ExpiredSignatureError:
             return None, "Access token expired"
-        except jwt.InvalidTokenError:
-            return None, "Invalid token"
+        except jwt.InvalidTokenError as exc:
+            message = str(exc)
+            return None, "Account disabled" if message == "Account disabled" else "Invalid token"
     return None, None
 
 
@@ -287,7 +304,15 @@ def current_user(request: Request) -> Optional[dict]:
 def require_user(request: Request) -> dict | JSONResponse:
     user, auth_error = authenticate_request(request)
     if not user:
-        return json_error(auth_error or "Login required", 401)
+        return json_error(auth_error or "Login required", 403 if auth_error == "Account disabled" else 401)
+    return user
+
+
+def require_admin(user=Depends(require_user)) -> dict | JSONResponse:
+    if isinstance(user, JSONResponse):
+        return user
+    if not user.get("isAdmin"):
+        return json_error("Admin access required", 403)
     return user
 
 
@@ -589,6 +614,8 @@ async def auth_login_api(request: Request):
     user = verify_user_password(login, password)
     if not user:
         return json_error("Invalid credentials", 401)
+    if user.get("disabledAt"):
+        return json_error("Account disabled", 403)
     return issue_auth_response(user, request)
 
 
@@ -629,6 +656,11 @@ def auth_refresh(request: Request):
     user = get_user_by_id(record["user_id"])
     if not user:
         response = json_error("User no longer exists", 401)
+        clear_refresh_cookie(response)
+        return response
+    if user.get("disabledAt"):
+        revoke_refresh_token(token_hash)
+        response = json_error("Account disabled", 403)
         clear_refresh_cookie(response)
         return response
     access_token = sign_access_token(user)
@@ -678,7 +710,12 @@ async def notes_create(request: Request, user=Depends(require_user)):
         return json_error("Note content is required", 400)
     if len(content) > 5000:
         return json_error("Note content is too long", 400)
-    return JSONResponse({"note": create_note(user["id"], content)}, status_code=201)
+    note = create_note(user["id"], content)
+    try:
+        index_note_for_user(user["id"], note["id"], note["content"])
+    except Exception:
+        pass
+    return JSONResponse({"note": note}, status_code=201)
 
 
 @app.delete("/api/notes/{note_id}")
@@ -705,6 +742,11 @@ def index(request: Request):
 @app.get("/friends", response_class=HTMLResponse)
 def friends_page(request: Request):
     return templates.TemplateResponse(request, "friends.html")
+
+
+@app.get("/forum", response_class=HTMLResponse)
+def forum_page(request: Request):
+    return templates.TemplateResponse(request, "forum.html")
 
 
 @app.get("/profiles", response_class=HTMLResponse)
@@ -756,17 +798,139 @@ def admin_page(request: Request):
 
 
 @app.get("/api/admin/users")
-def admin_users(user=Depends(require_user)):
+def admin_users(user=Depends(require_admin)):
     if isinstance(user, JSONResponse):
         return user
     return {"users": list_admin_users()}
 
 
 @app.get("/api/admin/request-logs")
-def admin_request_logs(limit: int = 100, user=Depends(require_user)):
+def admin_request_logs(limit: int = 100, user=Depends(require_admin)):
     if isinstance(user, JSONResponse):
         return user
     return {"logs": list_admin_request_logs(limit)}
+
+
+@app.get("/api/admin/actions")
+def admin_actions(limit: int = 100, user=Depends(require_admin)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"actions": list_admin_actions(limit)}
+
+
+def admin_target(target_user_id: str) -> tuple[Optional[dict], Optional[JSONResponse]]:
+    target = get_admin_user(target_user_id)
+    if not target:
+        return None, json_error("User not found", 404)
+    return target, None
+
+
+def assert_not_self_admin_action(admin: dict, target: dict, action: str) -> Optional[JSONResponse]:
+    if str(admin["id"]) == str(target["id"]):
+        return json_error(f"Cannot {action} your own account", 400)
+    return None
+
+
+def assert_not_admin_target(target: dict, action: str) -> Optional[JSONResponse]:
+    if target.get("isAdmin"):
+        return json_error(f"Cannot {action} an admin account", 400)
+    return None
+
+
+@app.post("/api/admin/users/{target_user_id}/reset-password")
+async def admin_user_reset_password(target_user_id: str, request: Request, admin=Depends(require_admin)):
+    if isinstance(admin, JSONResponse):
+        return admin
+    target, error = admin_target(target_user_id)
+    if error:
+        return error
+
+    data = await request.json()
+    password = data.get("password") or ""
+    if len(password) < 8:
+        return json_error("Password must be at least 8 characters", 400)
+
+    updated = reset_user_password(target["id"], password)
+    if not updated:
+        return json_error("User not found", 404)
+    log_admin_action(admin["id"], target["id"], "reset_password", {"username": target["username"]})
+    return {"ok": True, "user": updated}
+
+
+@app.post("/api/admin/users/{target_user_id}/suspend")
+async def admin_user_suspend(target_user_id: str, request: Request, admin=Depends(require_admin)):
+    if isinstance(admin, JSONResponse):
+        return admin
+    target, error = admin_target(target_user_id)
+    if error:
+        return error
+    guard = assert_not_self_admin_action(admin, target, "suspend") or assert_not_admin_target(target, "suspend")
+    if guard:
+        return guard
+
+    data = await request.json()
+    reason = (data.get("reason") or "").strip()
+    updated = suspend_user(target["id"], reason)
+    if not updated:
+        return json_error("User not found", 404)
+    log_admin_action(admin["id"], target["id"], "suspend_user", {"username": target["username"], "reason": reason})
+    return {"ok": True, "user": updated}
+
+
+@app.post("/api/admin/users/{target_user_id}/unsuspend")
+def admin_user_unsuspend(target_user_id: str, admin=Depends(require_admin)):
+    if isinstance(admin, JSONResponse):
+        return admin
+    target, error = admin_target(target_user_id)
+    if error:
+        return error
+
+    updated = unsuspend_user(target["id"])
+    if not updated:
+        return json_error("User not found", 404)
+    log_admin_action(admin["id"], target["id"], "unsuspend_user", {"username": target["username"]})
+    return {"ok": True, "user": updated}
+
+
+@app.post("/api/admin/users/{target_user_id}/revoke-sessions")
+def admin_user_revoke_sessions(target_user_id: str, admin=Depends(require_admin)):
+    if isinstance(admin, JSONResponse):
+        return admin
+    target, error = admin_target(target_user_id)
+    if error:
+        return error
+
+    revoked = revoke_refresh_tokens_for_user(target["id"])
+    log_admin_action(
+        admin["id"],
+        target["id"],
+        "revoke_sessions",
+        {"username": target["username"], "revokedRefreshTokens": revoked},
+    )
+    return {"ok": True, "revokedRefreshTokens": revoked, "user": get_admin_user(target["id"])}
+
+
+@app.delete("/api/admin/users/{target_user_id}")
+def admin_user_delete(target_user_id: str, admin=Depends(require_admin)):
+    if isinstance(admin, JSONResponse):
+        return admin
+    target, error = admin_target(target_user_id)
+    if error:
+        return error
+    guard = assert_not_self_admin_action(admin, target, "delete") or assert_not_admin_target(target, "delete")
+    if guard:
+        return guard
+
+    log_admin_action(
+        admin["id"],
+        target["id"],
+        "delete_user",
+        {"id": target["id"], "username": target["username"], "email": target["email"]},
+    )
+    deleted = delete_user_by_id(target["id"])
+    if not deleted:
+        return json_error("User not found", 404)
+    return {"ok": True, "deletedUser": deleted}
 
 
 @app.get("/api/notifications")
@@ -834,7 +998,11 @@ async def chat(request: Request, user=Depends(require_user)):
     mode_config = CHAT_MODES[mode]
     started_at = time.perf_counter()
     try:
-        reply = run_agent(user_input, get_conversation_history(user), mode=mode)
+        try:
+            retrieved_notes = retrieve_user_notes(user["id"], user_input, limit=4)
+        except Exception:
+            retrieved_notes = []
+        reply = run_agent(user_input, get_conversation_history(user), mode=mode, retrieved_notes=retrieved_notes)
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
         return {"reply": reply, "mode": mode, "model": mode_config.model}

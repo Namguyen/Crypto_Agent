@@ -35,6 +35,8 @@ def decode_access_token(token: str) -> dict:
     user = get_user_by_id(payload.get("sub"))
     if not user:
         raise jwt.InvalidTokenError("User no longer exists")
+    if user.get("disabledAt"):
+        raise jwt.InvalidTokenError("Account disabled")
     return user
 
 
@@ -48,8 +50,9 @@ def authenticate_request(request: Request) -> tuple[Optional[dict], Optional[str
         return user, None
     except jwt.ExpiredSignatureError:
         return None, "Access token expired"
-    except jwt.InvalidTokenError:
-        return None, "Invalid token"
+    except jwt.InvalidTokenError as exc:
+        message = str(exc)
+        return None, "Account disabled" if message == "Account disabled" else "Invalid token"
 
 
 def require_user(request: Request) -> dict:
@@ -59,7 +62,7 @@ def require_user(request: Request) -> dict:
     user, auth_error = authenticate_request(request)
     if not user:
         raise HTTPException(
-            status_code=401,
+            status_code=403 if auth_error == "Account disabled" else 401,
             detail={
                 "error": auth_error or "Login required",
                 "loginUrl": "/login",
