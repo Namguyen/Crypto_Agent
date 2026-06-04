@@ -4,16 +4,21 @@ from pydantic import BaseModel, Field
 
 from backend.ai.agent import summarize_forum_thread
 from backend.auth.dependencies import require_user
+from backend.auth.store import create_general_notification_event
 from backend.forum.store import (
     create_post,
     create_topic,
+    forum_reply_notification_recipients,
+    get_post,
     get_topic,
     list_posts,
     list_topics,
     save_topic_summary,
+    set_post_reaction,
 )
 
 router = APIRouter(prefix="/api/forum", tags=["forum"])
+ALLOWED_REACTIONS = {"like", "fire", "bull", "bear"}
 
 
 class TopicCreate(BaseModel):
@@ -25,15 +30,19 @@ class PostCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
 
 
+class ReactionUpdate(BaseModel):
+    reaction: str | None = Field(default=None, max_length=16)
+
+
 def clean_text(value: str) -> str:
     return " ".join((value or "").strip().split())
 
 
-def topic_payload(topic_id: str) -> dict | JSONResponse:
+def topic_payload(topic_id: str, current_user_id: int | str | None = None) -> dict | JSONResponse:
     topic = get_topic(topic_id)
     if not topic:
         return JSONResponse({"error": "Topic not found"}, status_code=404)
-    return {"topic": topic, "posts": list_posts(topic_id)}
+    return {"topic": topic, "posts": list_posts(topic_id, current_user_id=current_user_id)}
 
 
 @router.get("/topics")
@@ -53,7 +62,7 @@ def forum_topic_create(payload: TopicCreate, user=Depends(require_user)):
 
 @router.get("/topics/{topic_id}")
 def forum_topic_detail(topic_id: str, user=Depends(require_user)):
-    return topic_payload(topic_id)
+    return topic_payload(topic_id, user["id"])
 
 
 @router.post("/topics/{topic_id}/posts")
@@ -64,7 +73,37 @@ def forum_post_create(topic_id: str, payload: PostCreate, user=Depends(require_u
     post = create_post(user["id"], topic_id, content)
     if not post:
         return JSONResponse({"error": "Topic not found"}, status_code=404)
-    return JSONResponse({"post": post, **topic_payload(topic_id)}, status_code=201)
+    topic = get_topic(topic_id)
+    if topic:
+        preview = content[:140].strip()
+        if len(content) > 140:
+            preview += "..."
+        for recipient_id in forum_reply_notification_recipients(topic_id, user["id"]):
+            create_general_notification_event(
+                user_id=recipient_id,
+                event_type="forum_reply",
+                symbol="FORUM",
+                coin_id=f"forum:{topic_id}",
+                title=f"New reply: {topic['title']}",
+                message=f"{user['username']} replied: {preview}",
+                link_url=f"/forum?topic={topic_id}",
+            )
+    return JSONResponse({"post": post, **topic_payload(topic_id, user["id"])}, status_code=201)
+
+
+@router.post("/posts/{post_id}/reaction")
+def forum_post_reaction(post_id: str, payload: ReactionUpdate, user=Depends(require_user)):
+    reaction = (payload.reaction or "").strip().lower()
+    if reaction and reaction not in ALLOWED_REACTIONS:
+        return JSONResponse({"error": "Unsupported reaction"}, status_code=400)
+
+    updated = set_post_reaction(user["id"], post_id, reaction or None)
+    if not updated:
+        return JSONResponse({"error": "Post not found"}, status_code=404)
+    return {
+        "post": get_post(post_id, current_user_id=user["id"]),
+        **topic_payload(updated["topic_id"], user["id"]),
+    }
 
 
 @router.post("/topics/{topic_id}/summary")
@@ -72,7 +111,7 @@ def forum_topic_summary(topic_id: str, user=Depends(require_user)):
     topic = get_topic(topic_id)
     if not topic:
         return JSONResponse({"error": "Topic not found"}, status_code=404)
-    posts = list_posts(topic_id)
+    posts = list_posts(topic_id, current_user_id=user["id"])
     try:
         summary, model = summarize_forum_thread(topic, posts)
     except Exception as exc:

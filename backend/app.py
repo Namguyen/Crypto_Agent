@@ -58,6 +58,7 @@ from backend.chat.routes import router as chat_router
 from backend.chat.store import init_chat_db
 from backend.forum.routes import router as forum_router
 from backend.forum.store import init_forum_db
+from backend.recommendations import personalized_recommendations
 from backend.social.routes import router as social_router
 from backend.social.store import init_social_db
 from backend.users.routes import router as users_router
@@ -979,6 +980,13 @@ async def notifications_setting_update(setting_id: str, request: Request, user=D
 @app.get("/api/chat/modes")
 def chat_modes():
     return {"defaultMode": "instant", "modes": chat_mode_options()}
+
+
+@app.get("/api/recommendations")
+def recommendations(limit: int = 6, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    return {"recommendations": personalized_recommendations(user["id"], limit=limit)}
 
 
 @app.post("/api/chat")

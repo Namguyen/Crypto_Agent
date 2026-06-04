@@ -116,6 +116,19 @@
       margin-top: 10px;
       padding: 12px;
     }
+    .reactions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .reaction {
+      padding: 5px 8px;
+    }
+    .reaction.active {
+      background: rgba(239,159,39,.16);
+      border-color: rgba(239,159,39,.65);
+    }
     .summary {
       background: rgba(239,159,39,.08);
       border-color: rgba(239,159,39,.35);
@@ -179,9 +192,20 @@
     const API_AUTH_ME = '/api/auth/me';
     const API_AUTH_REFRESH = '/api/auth/refresh';
     const API_FORUM_TOPICS = '/api/forum/topics';
+    const REACTION_OPTIONS = [
+      ['like', 'LIKE'],
+      ['fire', 'FIRE'],
+      ['bull', 'BULL'],
+      ['bear', 'BEAR'],
+    ];
     let accessToken = null;
     let authState = { authenticated: false, user: null };
-    let forumState = { topics: [], selectedTopicId: null, topic: null, posts: [] };
+    let forumState = {
+      topics: [],
+      selectedTopicId: new URLSearchParams(window.location.search).get('topic'),
+      topic: null,
+      posts: [],
+    };
 
     function esc(value) {
       return String(value ?? '')
@@ -236,9 +260,18 @@
       root.innerHTML = `<div class="card">${forumState.topics.map(topic => `
         <div class="topic ${String(topic.id) === String(forumState.selectedTopicId) ? 'active' : ''}" onclick="selectTopic('${esc(topic.id)}')">
           <strong>${esc(topic.title)}</strong>
-          <div class="meta">by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} · ${esc(topic.replyCount)} replies</div>
+          <div class="meta">by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} - ${esc(topic.replyCount)} replies</div>
           <div class="meta">${fmtTime(topic.lastPostAt)}</div>
         </div>
+      `).join('')}</div>`;
+    }
+
+    function renderReactionButtons(post) {
+      const counts = post.reactionCounts || {};
+      return `<div class="reactions">${REACTION_OPTIONS.map(([key, label]) => `
+        <button class="reaction ${post.myReaction === key ? 'active' : ''}" type="button" onclick="setPostReaction('${esc(post.id)}', '${key}')">
+          ${label} ${Number(counts[key] || 0)}
+        </button>
       `).join('')}</div>`;
     }
 
@@ -259,7 +292,7 @@
       root.innerHTML = `
         <div class="card">
           <h1>${esc(topic.title)}</h1>
-          <div class="meta">Started by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} · ${fmtTime(topic.createdAt)}</div>
+          <div class="meta">Started by ${esc(topic.author?.displayName || topic.author?.username || 'unknown')} - ${fmtTime(topic.createdAt)}</div>
           <div class="body-text">${esc(topic.body)}</div>
           <div class="actions">
             <button onclick="summarizeTopic('${esc(topic.id)}')">AI summarize</button>
@@ -269,13 +302,14 @@
           <div class="card summary">
             <h2>AI Summary</h2>
             <div class="body-text">${esc(topic.summary)}</div>
-            <div class="meta">${esc(topic.summaryModel || '')} · ${fmtTime(topic.summaryUpdatedAt)}</div>
+            <div class="meta">${esc(topic.summaryModel || '')} - ${fmtTime(topic.summaryUpdatedAt)}</div>
           </div>` : ''}
         <div id="posts">
           ${forumState.posts.length ? forumState.posts.map(post => `
             <div class="post">
-              <div class="meta">${esc(post.author?.displayName || post.author?.username || 'unknown')} · ${fmtTime(post.createdAt)}</div>
+              <div class="meta">${esc(post.author?.displayName || post.author?.username || 'unknown')} - ${fmtTime(post.createdAt)}</div>
               <div class="body-text">${esc(post.content)}</div>
+              ${renderReactionButtons(post)}
             </div>
           `).join('') : '<div class="empty" style="margin-top:10px;">No replies yet.</div>'}
         </div>
@@ -378,6 +412,23 @@
       forumState.topic = data.topic;
       renderThread();
       await refreshForum();
+    }
+
+    async function setPostReaction(postId, reaction) {
+      const post = forumState.posts.find(item => String(item.id) === String(postId));
+      const nextReaction = post?.myReaction === reaction ? null : reaction;
+      const res = await authFetch(`/api/forum/posts/${encodeURIComponent(postId)}/reaction`, {
+        method: 'POST',
+        body: JSON.stringify({ reaction: nextReaction }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Could not update reaction');
+        return;
+      }
+      forumState.topic = data.topic;
+      forumState.posts = data.posts || [];
+      renderThread();
     }
 
     refreshForum();

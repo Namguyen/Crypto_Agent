@@ -147,25 +147,33 @@ class AuthFlowTest(unittest.TestCase):
             index = client.get("/")
             self.assertEqual(index.status_code, 200)
             self.assertIn('id="msgs"', index.text)
-            self.assertIn("CRYPTO AGENT online", index.text)
+            self.assertIn("Online. Ask me about", index.text)
+            self.assertIn('class="brand-mark">Coin', index.text)
+            self.assertIn('id="mainTabAgent"', index.text)
+            self.assertIn('id="mainTabMessages"', index.text)
+            self.assertIn('id="mainTabFriends"', index.text)
+            self.assertIn('id="mainTabNotes"', index.text)
+            self.assertIn('id="themeToggle"', index.text)
+            self.assertIn('id="agentView"', index.text)
+            self.assertIn("setMainTab", index.text)
             self.assertIn('id="accountMenu"', index.text)
             self.assertIn("handleAccountTrigger", index.text)
-            self.assertIn('id="globalDirectChatDock"', index.text)
-            self.assertIn('id="globalDirectChatPanels"', index.text)
-            self.assertIn("global-chat-panel", index.text)
-            self.assertIn("global-chat-input", index.text)
-            self.assertIn("new WebSocket", index.text)
-            self.assertIn("cryptoAgentDirectConversations", index.text)
-            self.assertIn("cryptoAgentDismissedDirectConversations", index.text)
-            self.assertIn("global-chat-bubble-close", index.text)
-            self.assertIn("cryptoAgentNotify", index.text)
-            self.assertIn("CONVERSATION_POLL_MS", index.text)
+            self.assertIn('id="messagesCol"', index.text)
+            self.assertIn('id="messagesUnreadCount"', index.text)
+            self.assertIn('id="friendsView"', index.text)
+            self.assertIn('id="friendSearchResults"', index.text)
+            self.assertIn("MESSAGE_TAB_POLL_MS", index.text)
+            self.assertIn("messageTabUnreadTotal", index.text)
+            self.assertIn("API_RECOMMENDATIONS", index.text)
+            self.assertIn("loadRecommendations", index.text)
             self.assertIn("CHECK NOW", index.text)
             self.assertIn("/api/dev/reload-version", index.text)
             self.assertNotIn('data-initial-page=', index.text)
-            self.assertNotIn('<div id="friendSearchResults"', index.text)
             self.assertNotIn('<section class="panel chat" id="socialChatCol"', index.text)
             self.assertNotIn('<form class="form" id="profileForm"', index.text)
+            self.assertNotIn('id="globalDirectChatDock"', index.text)
+            self.assertNotIn('id="globalDirectChatPanels"', index.text)
+            self.assertNotIn("global-chat-panel", index.text)
 
             friends = client.get("/friends")
             self.assertEqual(friends.status_code, 200)
@@ -314,6 +322,36 @@ class AuthFlowTest(unittest.TestCase):
             self.assertTrue(any("rag-only BTC support" in note["content"] for note in retrieved_notes))
             self.assertFalse(any("other-only" in note["content"] for note in retrieved_notes))
 
+    def test_recommendations_follow_user_context(self):
+        with TestClient(self.app) as client:
+            anonymous = client.get("/api/recommendations")
+            self.assertEqual(anonymous.status_code, 401)
+
+            register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "recommenduser",
+                    "email": "recommenduser@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(register.status_code, 201)
+            headers = {"Authorization": f"Bearer {register.json()['accessToken']}"}
+
+            note = client.post(
+                "/api/notes",
+                json={"content": "BNB breakout plan, watching invalidation risk and support reclaim."},
+                headers=headers,
+            )
+            self.assertEqual(note.status_code, 201)
+
+            recommendations = client.get("/api/recommendations?limit=6", headers=headers)
+            self.assertEqual(recommendations.status_code, 200)
+            items = recommendations.json()["recommendations"]
+            self.assertGreaterEqual(len(items), 1)
+            combined = " ".join(f"{item['label']} {item['prompt']}" for item in items)
+            self.assertIn("BNB", combined)
+
     def test_admin_pages_and_apis(self):
         with TestClient(self.app) as client:
             login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
@@ -451,6 +489,37 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(reply.status_code, 201)
             self.assertEqual(reply.json()["topic"]["replyCount"], 1)
             self.assertEqual(reply.json()["posts"][0]["author"]["username"], "forumreply")
+            post_id = reply.json()["posts"][0]["id"]
+
+            notifications = client.get("/api/notifications", headers=headers)
+            self.assertEqual(notifications.status_code, 200)
+            forum_events = [
+                event
+                for event in notifications.json()["events"]
+                if event["eventType"] == "forum_reply"
+            ]
+            self.assertTrue(forum_events)
+            self.assertEqual(forum_events[0]["linkUrl"], f"/forum?topic={topic['id']}")
+
+            reaction = client.post(
+                f"/api/forum/posts/{post_id}/reaction",
+                json={"reaction": "fire"},
+                headers=headers,
+            )
+            self.assertEqual(reaction.status_code, 200)
+            reacted_post = next(post for post in reaction.json()["posts"] if post["id"] == post_id)
+            self.assertEqual(reacted_post["reactionCounts"]["fire"], 1)
+            self.assertEqual(reacted_post["myReaction"], "fire")
+
+            removed_reaction = client.post(
+                f"/api/forum/posts/{post_id}/reaction",
+                json={"reaction": None},
+                headers=headers,
+            )
+            self.assertEqual(removed_reaction.status_code, 200)
+            unreacted_post = next(post for post in removed_reaction.json()["posts"] if post["id"] == post_id)
+            self.assertNotIn("fire", unreacted_post["reactionCounts"])
+            self.assertEqual(unreacted_post["myReaction"], "")
 
             topics = client.get("/api/forum/topics", headers=headers)
             self.assertEqual(topics.status_code, 200)
@@ -517,12 +586,13 @@ class AuthFlowTest(unittest.TestCase):
             initial = client.get("/api/notifications", headers=headers)
             self.assertEqual(initial.status_code, 200)
             self.assertGreaterEqual(len(initial.json()["settings"]), 5)
+            initial_unread = initial.json()["unreadCount"]
 
             checked = client.post("/api/notifications/check", headers=headers)
             self.assertEqual(checked.status_code, 200)
             self.assertEqual(len(checked.json()["created"]), 1)
             self.assertEqual(checked.json()["created"][0]["symbol"], "BTC")
-            self.assertEqual(checked.json()["unreadCount"], 1)
+            self.assertEqual(checked.json()["unreadCount"], initial_unread + 1)
 
             read = client.post("/api/notifications/read", headers=headers)
             self.assertEqual(read.status_code, 200)
@@ -735,6 +805,15 @@ class AuthFlowTest(unittest.TestCase):
             bob_conversations = client.get("/api/conversations", headers=bob_headers)
             self.assertEqual(bob_conversations.status_code, 200)
             self.assertEqual(bob_conversations.json()["conversations"][0]["unreadCount"], 2)
+
+            bob_notifications = client.get("/api/notifications", headers=bob_headers)
+            self.assertEqual(bob_notifications.status_code, 200)
+            direct_events = [
+                event
+                for event in bob_notifications.json()["events"]
+                if event["eventType"] == "direct_message"
+            ]
+            self.assertFalse(direct_events)
 
             marked_read = client.post(
                 f"/api/conversations/{conversation_id}/read",

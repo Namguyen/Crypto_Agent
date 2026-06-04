@@ -133,10 +133,12 @@ def init_auth_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 setting_id INTEGER,
+                event_type TEXT NOT NULL DEFAULT 'price_alert',
                 coin_id TEXT NOT NULL,
                 symbol TEXT NOT NULL,
                 title TEXT NOT NULL,
                 message TEXT NOT NULL,
+                link_url TEXT,
                 price_usd REAL,
                 change_percent REAL,
                 created_at INTEGER NOT NULL,
@@ -171,6 +173,8 @@ def init_auth_db() -> None:
         ensure_column(conn, "users", "disabled_reason", "TEXT")
         ensure_column(conn, "user_requests", "mode", "TEXT NOT NULL DEFAULT 'instant'")
         ensure_column(conn, "user_requests", "model", "TEXT")
+        ensure_column(conn, "notification_events", "event_type", "TEXT NOT NULL DEFAULT 'price_alert'")
+        ensure_column(conn, "notification_events", "link_url", "TEXT")
 
 
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -841,32 +845,47 @@ def active_notification_settings(user_id: int | str) -> list[dict]:
 
 def create_notification_event(
     user_id: int | str,
-    setting_id: int | str,
+    setting_id: int | str | None,
     coin_id: str,
     symbol: str,
     title: str,
     message: str,
     price_usd: Optional[float],
     change_percent: Optional[float],
+    event_type: str = "price_alert",
+    link_url: str | None = None,
 ) -> dict:
     now = int(time.time())
     with auth_connection() as conn:
         cursor = conn.execute(
             """
             INSERT INTO notification_events
-                (user_id, setting_id, coin_id, symbol, title, message, price_usd, change_percent, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, setting_id, event_type, coin_id, symbol, title, message, link_url, price_usd, change_percent, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (str(user_id), str(setting_id), coin_id, symbol, title, message, price_usd, change_percent, now),
+            (
+                str(user_id),
+                str(setting_id) if setting_id is not None else None,
+                event_type,
+                coin_id,
+                symbol,
+                title,
+                message,
+                link_url,
+                price_usd,
+                change_percent,
+                now,
+            ),
         )
-        conn.execute(
-            """
-            UPDATE notification_settings
-            SET last_notified_at = ?, updated_at = ?
-            WHERE id = ? AND user_id = ?
-            """,
-            (now, now, str(setting_id), str(user_id)),
-        )
+        if setting_id is not None:
+            conn.execute(
+                """
+                UPDATE notification_settings
+                SET last_notified_at = ?, updated_at = ?
+                WHERE id = ? AND user_id = ?
+                """,
+                (now, now, str(setting_id), str(user_id)),
+            )
         row = conn.execute(
             "SELECT * FROM notification_events WHERE id = ?",
             (cursor.lastrowid,),
@@ -874,13 +893,38 @@ def create_notification_event(
     return public_notification_event(row)
 
 
+def create_general_notification_event(
+    user_id: int | str,
+    event_type: str,
+    title: str,
+    message: str,
+    link_url: str = "",
+    symbol: str = "APP",
+    coin_id: str = "app",
+) -> dict:
+    return create_notification_event(
+        user_id=user_id,
+        setting_id=None,
+        coin_id=coin_id,
+        symbol=symbol,
+        title=title,
+        message=message,
+        price_usd=None,
+        change_percent=None,
+        event_type=event_type,
+        link_url=link_url,
+    )
+
+
 def public_notification_event(row: sqlite3.Row | dict) -> dict:
     return {
         "id": str(row["id"]),
+        "eventType": row["event_type"] if "event_type" in row.keys() else "price_alert",
         "coinId": row["coin_id"],
         "symbol": row["symbol"],
         "title": row["title"],
         "message": row["message"],
+        "linkUrl": (row["link_url"] if "link_url" in row.keys() else "") or "",
         "priceUsd": row["price_usd"],
         "changePercent": row["change_percent"],
         "createdAt": int(row["created_at"]),
