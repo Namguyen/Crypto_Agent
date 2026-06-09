@@ -79,17 +79,6 @@
       background: #f4c84f;
       transform: translateX(-50%);
     }
-    .main-tab.has-caret::after {
-      content: '';
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-right: 1.5px solid currentColor;
-      border-bottom: 1.5px solid currentColor;
-      transform: rotate(45deg) translateY(-3px);
-      margin-left: 8px;
-      opacity: .9;
-    }
     .main-tab-badge {
       display: none;
       min-width: 18px;
@@ -1896,10 +1885,11 @@
     <div class="hdr-left" aria-hidden="true"></div>
     <nav class="main-tabs" aria-label="Main workspace">
       <button class="main-tab active" id="mainTabAgent" type="button" onclick="setMainTab('agent')">Agent</button>
-      <button class="main-tab has-caret" id="mainTabPortfolio" type="button" onclick="setMainTab('portfolio')">Portfolio</button>
-      <button class="main-tab has-caret" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
-      <button class="main-tab has-caret" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
-      <button class="main-tab has-caret" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
+      <button class="main-tab" id="mainTabPortfolio" type="button" onclick="setMainTab('portfolio')">Portfolio</button>
+      <button class="main-tab" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
+      <button class="main-tab" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
+      <button class="main-tab" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
+      <button class="main-tab" id="mainTabForum" type="button" onclick="window.location.href='/forum'">Forum</button>
     </nav>
     <div class="hdr-right">
       <div class="theme-switch">

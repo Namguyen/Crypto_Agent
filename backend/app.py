@@ -60,6 +60,7 @@ from backend.chat.store import init_chat_db
 from backend.forum.routes import router as forum_router
 from backend.forum.store import init_forum_db
 from backend.portfolio.store import (
+    clear_portfolio_snapshots,
     create_portfolio_snapshot,
     delete_portfolio_holding,
     init_portfolio_db,
@@ -1231,8 +1232,11 @@ def portfolio_holding_delete(symbol: str, user=Depends(require_user)):
     if normalized_symbol not in PORTFOLIO_SYMBOL_TO_COIN_ID:
         return json_error("Unsupported crypto symbol", 400)
     delete_portfolio_holding(user["id"], normalized_symbol)
-    if list_portfolio_holdings(user["id"]):
+    remaining_holdings = list_portfolio_holdings(user["id"])
+    if remaining_holdings:
         create_portfolio_snapshot(user["id"])
+    else:
+        clear_portfolio_snapshots(user["id"])
     return portfolio_payload(user["id"])
 
 

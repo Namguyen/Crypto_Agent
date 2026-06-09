@@ -171,6 +171,8 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="mainTabMessages"', index.text)
             self.assertIn('id="mainTabFriends"', index.text)
             self.assertIn('id="mainTabNotes"', index.text)
+            self.assertIn('id="mainTabForum"', index.text)
+            self.assertIn("window.location.href='/forum'", index.text)
             self.assertIn('id="themeToggle"', index.text)
             self.assertIn('id="agentView"', index.text)
             self.assertIn("setMainTab", index.text)
@@ -404,6 +406,12 @@ class AuthFlowTest(unittest.TestCase):
             deleted = client.delete("/api/portfolio/holdings/BTC", headers=owner_headers)
             self.assertEqual(deleted.status_code, 200)
             self.assertEqual([holding["symbol"] for holding in deleted.json()["holdings"]], ["ETH"])
+
+            deleted_last = client.delete("/api/portfolio/holdings/ETH", headers=owner_headers)
+            self.assertEqual(deleted_last.status_code, 200)
+            self.assertEqual(deleted_last.json()["holdings"], [])
+            self.assertEqual(deleted_last.json()["snapshots"], [])
+            self.assertEqual(deleted_last.json()["summary"]["totalValueUsd"], 0)
 
     def test_note_retrieval_is_user_scoped_and_passed_to_agent(self):
         from backend.ai.retrieval import retrieve_user_notes

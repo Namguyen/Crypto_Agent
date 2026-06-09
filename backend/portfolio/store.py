@@ -152,6 +152,12 @@ def current_cost_summary(holdings: list[dict]) -> dict:
 
 def portfolio_payload(user_id: int | str) -> dict:
     holdings = list_portfolio_holdings(user_id)
+    if not holdings:
+        return {
+            "holdings": [],
+            "snapshots": [],
+            "summary": current_cost_summary([]),
+        }
     snapshots = list_portfolio_snapshots(user_id)
     return {
         "holdings": holdings,
@@ -239,6 +245,17 @@ def delete_portfolio_holding(user_id: int | str, symbol: str) -> bool:
             (str(user_id), symbol.upper()),
         )
     return cursor.rowcount > 0
+
+
+def clear_portfolio_snapshots(user_id: int | str) -> None:
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            DELETE FROM portfolio_value_snapshots
+            WHERE user_id = ?
+            """,
+            (str(user_id),),
+        )
 
 
 def update_holding_valuations(
