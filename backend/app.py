@@ -37,6 +37,7 @@ from backend.auth.store import (
     create_notification_event,
     list_notification_events,
     list_notification_settings,
+    list_recent_user_request_messages,
     list_admin_request_logs,
     list_admin_users,
     list_notes,
@@ -1010,7 +1011,20 @@ async def chat(request: Request, user=Depends(require_user)):
             retrieved_notes = retrieve_user_notes(user["id"], user_input, limit=4)
         except Exception:
             retrieved_notes = []
-        reply = run_agent(user_input, get_conversation_history(user), mode=mode, retrieved_notes=retrieved_notes)
+        recent_activity = list_recent_user_request_messages(user["id"], limit=5)
+        ai_profile = {
+            **(user.get("aiProfile") or {}),
+            "displayName": user.get("displayName", ""),
+            "bio": user.get("bio", ""),
+        }
+        reply = run_agent(
+            user_input,
+            get_conversation_history(user),
+            mode=mode,
+            retrieved_notes=retrieved_notes,
+            ai_profile=ai_profile,
+            recent_activity=recent_activity,
+        )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
         return {"reply": reply, "mode": mode, "model": mode_config.model}

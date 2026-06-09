@@ -27,6 +27,29 @@ THEME_PATTERNS = {
     "news": ["news", "headline", "event", "cpi", "fed", "etf"],
 }
 
+GENERATED_PROMPT_PREFIXES = (
+    "use my notes and recent context to review my ",
+    "what are the biggest risks in my current ",
+    "use my saved context to analyze my ",
+    "summarize the forum discussions i have been active in",
+    "find the most important trading insights from my notebook",
+)
+
+GENERATED_PROMPTS = {
+    "btc price and trend analysis",
+    "latest crypto news today",
+    "top gainers and losers today",
+    "help me build a risk checklist for my current crypto watchlist.",
+    "build a crypto watchlist from my recent interests.",
+}
+
+
+def is_generated_prompt(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in GENERATED_PROMPTS or any(
+        normalized.startswith(prefix) for prefix in GENERATED_PROMPT_PREFIXES
+    )
+
 
 def fetch_recommendation_context(user_id: int | str) -> dict:
     with auth_connection() as conn:
@@ -82,7 +105,9 @@ def fetch_recommendation_context(user_id: int | str) -> dict:
             """
             SELECT symbol
             FROM notification_settings
-            WHERE user_id = ? AND enabled = 1
+            WHERE user_id = ?
+              AND enabled = 1
+              AND (updated_at > created_at OR last_notified_at IS NOT NULL)
             ORDER BY updated_at DESC, id DESC
             LIMIT 10
             """,
@@ -91,7 +116,7 @@ def fetch_recommendation_context(user_id: int | str) -> dict:
 
     return {
         "notes": [row["content"] for row in note_rows],
-        "requests": [row["message"] for row in request_rows],
+        "requests": [row["message"] for row in request_rows if not is_generated_prompt(row["message"])],
         "forum": [row["text"] for row in forum_rows],
         "messages": [row["content"] for row in message_rows],
         "alerts": [row["symbol"] for row in alert_rows],
@@ -192,17 +217,5 @@ def personalized_recommendations(user_id: int | str, limit: int = 6) -> list[dic
             "Find the most important trading insights from my notebook.",
             "notebook",
         )
-
-    fallbacks = [
-        ("BTC analysis", "BTC price and trend analysis"),
-        ("latest news", "Latest crypto news today"),
-        ("top movers", "Top gainers and losers today"),
-        ("risk check", "Help me build a risk checklist for my current crypto watchlist."),
-        ("watchlist", "Build a crypto watchlist from my recent interests."),
-    ]
-    for label, prompt in fallbacks:
-        if len(items) >= limit:
-            break
-        add_unique(items, seen, label, prompt, "fallback")
 
     return items[: max(1, min(int(limit or 6), 10))]

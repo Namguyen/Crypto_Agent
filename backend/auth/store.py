@@ -43,6 +43,12 @@ def init_auth_db() -> None:
                 display_name TEXT,
                 bio TEXT,
                 picture TEXT,
+                ai_experience_level TEXT,
+                ai_communication_style TEXT,
+                ai_risk_profile TEXT,
+                ai_preferred_depth TEXT,
+                ai_goals TEXT,
+                ai_favorite_assets TEXT,
                 is_admin INTEGER NOT NULL DEFAULT 0,
                 disabled_at INTEGER,
                 disabled_reason TEXT,
@@ -168,6 +174,12 @@ def init_auth_db() -> None:
         ensure_column(conn, "users", "display_name", "TEXT")
         ensure_column(conn, "users", "bio", "TEXT")
         ensure_column(conn, "users", "picture", "TEXT")
+        ensure_column(conn, "users", "ai_experience_level", "TEXT")
+        ensure_column(conn, "users", "ai_communication_style", "TEXT")
+        ensure_column(conn, "users", "ai_risk_profile", "TEXT")
+        ensure_column(conn, "users", "ai_preferred_depth", "TEXT")
+        ensure_column(conn, "users", "ai_goals", "TEXT")
+        ensure_column(conn, "users", "ai_favorite_assets", "TEXT")
         ensure_column(conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "users", "disabled_at", "INTEGER")
         ensure_column(conn, "users", "disabled_reason", "TEXT")
@@ -188,6 +200,22 @@ def normalize_email(email: Optional[str]) -> Optional[str]:
     return value or None
 
 
+def public_ai_profile(row: sqlite3.Row | dict) -> dict:
+    keys = row.keys()
+
+    def value(column: str) -> str:
+        return ((row[column] if column in keys else "") or "").strip()
+
+    return {
+        "experienceLevel": value("ai_experience_level"),
+        "communicationStyle": value("ai_communication_style"),
+        "riskProfile": value("ai_risk_profile"),
+        "preferredDepth": value("ai_preferred_depth"),
+        "goals": value("ai_goals"),
+        "favoriteAssets": value("ai_favorite_assets"),
+    }
+
+
 def public_user(row: sqlite3.Row | dict) -> dict:
     display_name = (row["display_name"] if "display_name" in row.keys() else "") or row["username"]
     picture = (row["picture"] if "picture" in row.keys() else "") or ""
@@ -204,6 +232,7 @@ def public_user(row: sqlite3.Row | dict) -> dict:
         "isAdmin": bool(row["is_admin"] if "is_admin" in row.keys() else 0),
         "disabledAt": int(disabled_at) if disabled_at else None,
         "disabledReason": (row["disabled_reason"] if "disabled_reason" in row.keys() else "") or "",
+        "aiProfile": public_ai_profile(row),
         "email_verified": bool(row["email"]),
         "provider": "local",
     }
@@ -480,6 +509,22 @@ def log_user_request(
             """,
             (str(user_id), message, reply, status, error, duration_ms, mode, model, now),
         )
+
+
+def list_recent_user_request_messages(user_id: int | str, limit: int = 5) -> list[str]:
+    safe_limit = max(1, min(int(limit or 5), 10))
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT message
+            FROM user_requests
+            WHERE user_id = ? AND status = 'ok'
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (str(user_id), safe_limit),
+        ).fetchall()
+    return [row["message"] for row in rows if (row["message"] or "").strip()]
 
 
 def admin_user_summary(row: sqlite3.Row | dict) -> dict:

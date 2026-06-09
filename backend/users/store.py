@@ -93,3 +93,38 @@ def update_user_profile(
             (str(user_id),),
         ).fetchone()
     return public_user_profile(row) if row else None
+
+
+def update_user_ai_profile(
+    user_id: int | str,
+    *,
+    experience_level: str,
+    communication_style: str,
+    risk_profile: str,
+    preferred_depth: str,
+    goals: str,
+    favorite_assets: str,
+) -> None:
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET ai_experience_level = ?,
+                ai_communication_style = ?,
+                ai_risk_profile = ?,
+                ai_preferred_depth = ?,
+                ai_goals = ?,
+                ai_favorite_assets = ?,
+                updated_at = strftime('%s', 'now')
+            WHERE id = ?
+            """,
+            (
+                experience_level or None,
+                communication_style or None,
+                risk_profile or None,
+                preferred_depth or None,
+                goals or None,
+                favorite_assets or None,
+                str(user_id),
+            ),
+        )

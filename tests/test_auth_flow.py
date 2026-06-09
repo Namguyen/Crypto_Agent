@@ -100,12 +100,27 @@ class AuthFlowTest(unittest.TestCase):
                     "displayName": "Seed Trader",
                     "bio": "Macro-aware BTC and ETH watcher.",
                     "picture": "https://example.com/avatar.png",
+                    "aiProfile": {
+                        "experienceLevel": "advanced",
+                        "communicationStyle": "executive",
+                        "riskProfile": "balanced",
+                        "preferredDepth": "short",
+                        "favoriteAssets": "BTC, ETH",
+                        "goals": "Macro-aware long-term accumulation.",
+                    },
                 },
                 headers=headers,
             )
             self.assertEqual(updated.status_code, 200)
             self.assertEqual(updated.json()["user"]["displayName"], "Seed Trader")
             self.assertEqual(updated.json()["user"]["bio"], "Macro-aware BTC and ETH watcher.")
+            ai_profile = updated.json()["user"]["aiProfile"]
+            self.assertEqual(ai_profile["experienceLevel"], "advanced")
+            self.assertEqual(ai_profile["communicationStyle"], "executive")
+            self.assertEqual(ai_profile["riskProfile"], "balanced")
+            self.assertEqual(ai_profile["preferredDepth"], "short")
+            self.assertEqual(ai_profile["favoriteAssets"], "BTC, ETH")
+            self.assertEqual(ai_profile["goals"], "Macro-aware long-term accumulation.")
 
             png_bytes = (
                 b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -141,6 +156,8 @@ class AuthFlowTest(unittest.TestCase):
 
             me = client.get("/api/auth/me", headers=headers)
             self.assertEqual(me.json()["user"]["name"], "Seed Trader")
+            self.assertEqual(me.json()["user"]["aiProfile"]["communicationStyle"], "executive")
+            self.assertEqual(me.json()["user"]["aiProfile"]["favoriteAssets"], "BTC, ETH")
 
     def test_auth_pages_render_forms(self):
         with TestClient(self.app) as client:
@@ -156,6 +173,11 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="themeToggle"', index.text)
             self.assertIn('id="agentView"', index.text)
             self.assertIn("setMainTab", index.text)
+            self.assertIn('id="chatModePicker"', index.text)
+            self.assertIn('id="modeMenu"', index.text)
+            self.assertIn("setChatModeFromMenu", index.text)
+            self.assertIn("hideRecommendationChipsForSession", index.text)
+            self.assertIn("recommendationChipsDismissed", index.text)
             self.assertIn('id="accountMenu"', index.text)
             self.assertIn("handleAccountTrigger", index.text)
             self.assertIn('id="messagesCol"', index.text)
@@ -174,6 +196,8 @@ class AuthFlowTest(unittest.TestCase):
             self.assertNotIn('id="globalDirectChatDock"', index.text)
             self.assertNotIn('id="globalDirectChatPanels"', index.text)
             self.assertNotIn("global-chat-panel", index.text)
+            self.assertNotIn("<span>Instant mode</span>", index.text)
+            self.assertNotIn("<span>Reasoning mode</span>", index.text)
 
             friends = client.get("/friends")
             self.assertEqual(friends.status_code, 200)
@@ -198,6 +222,11 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="profilePicture"', profiles.text)
             self.assertIn('id="themeLightBtn"', profiles.text)
             self.assertIn('id="tabPreferences"', profiles.text)
+            self.assertIn('id="aiProfileForm"', profiles.text)
+            self.assertIn('id="aiExperienceLevel"', profiles.text)
+            self.assertIn('id="aiCommunicationStyle"', profiles.text)
+            self.assertIn('id="aiFavoriteAssets"', profiles.text)
+            self.assertIn("AI AGENT PERSONALIZATION", profiles.text)
             self.assertIn("API_USER_ME", profiles.text)
 
             profile = client.get("/profile")
@@ -279,6 +308,25 @@ class AuthFlowTest(unittest.TestCase):
             rag_user = rag_register.json()["user"]
             rag_headers = {"Authorization": f"Bearer {rag_register.json()['accessToken']}"}
 
+            rag_profile = client.patch(
+                "/api/users/me",
+                json={
+                    "displayName": "RAG Analyst",
+                    "bio": "Technical BTC trader focused on support and invalidation.",
+                    "picture": "",
+                    "aiProfile": {
+                        "experienceLevel": "advanced",
+                        "communicationStyle": "technical",
+                        "riskProfile": "conservative",
+                        "preferredDepth": "detailed",
+                        "favoriteAssets": "BTC",
+                        "goals": "Respect invalidation before entering trades.",
+                    },
+                },
+                headers=rag_headers,
+            )
+            self.assertEqual(rag_profile.status_code, 200)
+
             rag_note = client.post(
                 "/api/notes",
                 json={"content": "rag-only BTC support at 60000, watching for rebound"},
@@ -319,8 +367,13 @@ class AuthFlowTest(unittest.TestCase):
             )
             self.assertEqual(chat.status_code, 200)
             retrieved_notes = run_agent.call_args.kwargs["retrieved_notes"]
+            ai_profile = run_agent.call_args.kwargs["ai_profile"]
             self.assertTrue(any("rag-only BTC support" in note["content"] for note in retrieved_notes))
             self.assertFalse(any("other-only" in note["content"] for note in retrieved_notes))
+            self.assertEqual(ai_profile["displayName"], "RAG Analyst")
+            self.assertEqual(ai_profile["communicationStyle"], "technical")
+            self.assertEqual(ai_profile["riskProfile"], "conservative")
+            self.assertEqual(run_agent.call_args.kwargs["recent_activity"], [])
 
     def test_recommendations_follow_user_context(self):
         with TestClient(self.app) as client:
@@ -338,6 +391,23 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(register.status_code, 201)
             headers = {"Authorization": f"Bearer {register.json()['accessToken']}"}
 
+            defaults = client.get("/api/notifications", headers=headers)
+            self.assertEqual(defaults.status_code, 200)
+            fresh_recommendations = client.get("/api/recommendations?limit=6", headers=headers)
+            self.assertEqual(fresh_recommendations.status_code, 200)
+            self.assertEqual(fresh_recommendations.json()["recommendations"], [])
+
+            with patch("backend.app.run_agent", return_value="generic reply"):
+                generated_prompt_chat = client.post(
+                    "/api/chat",
+                    json={"message": "BTC price and trend analysis", "mode": "instant"},
+                    headers=headers,
+                )
+            self.assertEqual(generated_prompt_chat.status_code, 200)
+            generated_prompt_recommendations = client.get("/api/recommendations?limit=6", headers=headers)
+            self.assertEqual(generated_prompt_recommendations.status_code, 200)
+            self.assertEqual(generated_prompt_recommendations.json()["recommendations"], [])
+
             note = client.post(
                 "/api/notes",
                 json={"content": "BNB breakout plan, watching invalidation risk and support reclaim."},
@@ -351,6 +421,32 @@ class AuthFlowTest(unittest.TestCase):
             self.assertGreaterEqual(len(items), 1)
             combined = " ".join(f"{item['label']} {item['prompt']}" for item in items)
             self.assertIn("BNB", combined)
+            self.assertEqual(items[0]["source"], "personalized-symbol")
+
+            other_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "recommendother",
+                    "email": "recommendother@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(other_register.status_code, 201)
+            other_headers = {"Authorization": f"Bearer {other_register.json()['accessToken']}"}
+            other_defaults = client.get("/api/notifications", headers=other_headers)
+            self.assertEqual(other_defaults.status_code, 200)
+            other_note = client.post(
+                "/api/notes",
+                json={"content": "SOL validator rotation and staking yield plan."},
+                headers=other_headers,
+            )
+            self.assertEqual(other_note.status_code, 201)
+            other_recommendations = client.get("/api/recommendations?limit=6", headers=other_headers)
+            self.assertEqual(other_recommendations.status_code, 200)
+            other_items = other_recommendations.json()["recommendations"]
+            other_combined = " ".join(f"{item['label']} {item['prompt']}" for item in other_items)
+            self.assertIn("SOL", other_combined)
+            self.assertNotEqual(items[0]["label"], other_items[0]["label"])
 
     def test_admin_pages_and_apis(self):
         with TestClient(self.app) as client:
@@ -688,6 +784,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="addFriendBtn"', public_profile_page.text)
             self.assertNotIn('id="profilePicture"', public_profile_page.text)
             self.assertNotIn('id="profileForm"', public_profile_page.text)
+            self.assertNotIn('id="aiProfileForm"', public_profile_page.text)
 
             self_request = client.post(
                 "/api/friends/requests",

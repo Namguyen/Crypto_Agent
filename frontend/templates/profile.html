@@ -66,7 +66,7 @@
       cursor: pointer;
     }
     button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #111; }
-    button:disabled, input:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
+    button:disabled, input:disabled, textarea:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
     .card {
       margin-top: 18px;
       border: 1px solid var(--line);
@@ -174,7 +174,7 @@
     }
     .field { display: grid; gap: 7px; }
     label { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       border: 1px solid var(--line);
       background: var(--input);
@@ -185,7 +185,15 @@
       font: inherit;
     }
     textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
-    input:focus, textarea:focus { border-color: var(--accent); }
+    select { min-height: 40px; }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    .form-section-title {
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      margin-top: 8px;
+    }
     .theme-option.active { background: var(--accent); border-color: var(--accent); color: #111; }
     .note {
       padding: 12px;
@@ -305,6 +313,62 @@
               </div>
             </div>
             <div class="note">Theme preference is saved on this browser and applies to profile and social pages.</div>
+            <div class="form-section-title">AI AGENT PERSONALIZATION</div>
+            <form class="form" id="aiProfileForm" onsubmit="saveProfile(event)">
+              <div class="form-grid">
+                <div class="field">
+                  <label for="aiExperienceLevel">EXPERIENCE LEVEL</label>
+                  <select id="aiExperienceLevel" name="experienceLevel">
+                    <option value="">No preference</option>
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="aiCommunicationStyle">COMMUNICATION STYLE</label>
+                  <select id="aiCommunicationStyle" name="communicationStyle">
+                    <option value="">No preference</option>
+                    <option value="direct">Direct</option>
+                    <option value="casual">Casual</option>
+                    <option value="executive">Executive brief</option>
+                    <option value="technical">Technical</option>
+                    <option value="teacher">Teacher</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="aiRiskProfile">RISK STYLE</label>
+                  <select id="aiRiskProfile" name="riskProfile">
+                    <option value="">No preference</option>
+                    <option value="conservative">Conservative</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="aggressive">Aggressive</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="aiPreferredDepth">ANSWER DEPTH</label>
+                  <select id="aiPreferredDepth" name="preferredDepth">
+                    <option value="">No preference</option>
+                    <option value="short">Short</option>
+                    <option value="normal">Normal</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="aiFavoriteAssets">WATCHLIST OR FAVORITE ASSETS</label>
+                <input id="aiFavoriteAssets" name="favoriteAssets" placeholder="Example: BTC, ETH, SOL, BNB" maxlength="240" />
+              </div>
+              <div class="field">
+                <label for="aiGoals">GOALS</label>
+                <textarea id="aiGoals" name="goals" maxlength="500" placeholder="Example: long-term BTC accumulation, swing trade majors, avoid leverage"></textarea>
+              </div>
+              <div class="note">These settings are private. The agent uses them to adjust tone, depth, examples, and risk framing.</div>
+              <div class="actions">
+                <button type="button" onclick="loadAuth()">Reset</button>
+                <button class="primary" id="aiProfileSaveBtn" type="submit">Save AI Profile</button>
+              </div>
+            </form>
           </div>
         </section>
 
@@ -450,6 +514,19 @@
           el.disabled = !authState.authenticated;
         }
       }
+      const aiForm = document.getElementById('aiProfileForm');
+      if (aiForm) {
+        const aiProfile = authState.authenticated ? (user.aiProfile || {}) : {};
+        document.getElementById('aiExperienceLevel').value = aiProfile.experienceLevel || '';
+        document.getElementById('aiCommunicationStyle').value = aiProfile.communicationStyle || '';
+        document.getElementById('aiRiskProfile').value = aiProfile.riskProfile || '';
+        document.getElementById('aiPreferredDepth').value = aiProfile.preferredDepth || '';
+        document.getElementById('aiFavoriteAssets').value = aiProfile.favoriteAssets || '';
+        document.getElementById('aiGoals').value = aiProfile.goals || '';
+        for (const el of aiForm.querySelectorAll('input, textarea, select, button')) {
+          el.disabled = !authState.authenticated;
+        }
+      }
     }
     async function handleAuthClick() {
       if (!authState.authenticated) {
@@ -471,10 +548,18 @@
       const displayName = document.getElementById('profileDisplayName').value.trim();
       const bio = document.getElementById('profileBio').value.trim();
       const picture = document.getElementById('profilePicture').value.trim();
+      const aiProfile = {
+        experienceLevel: document.getElementById('aiExperienceLevel')?.value || '',
+        communicationStyle: document.getElementById('aiCommunicationStyle')?.value || '',
+        riskProfile: document.getElementById('aiRiskProfile')?.value || '',
+        preferredDepth: document.getElementById('aiPreferredDepth')?.value || '',
+        favoriteAssets: document.getElementById('aiFavoriteAssets')?.value.trim() || '',
+        goals: document.getElementById('aiGoals')?.value.trim() || '',
+      };
       const res = await authFetch(API_USER_ME, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName, bio, picture }),
+        body: JSON.stringify({ displayName, bio, picture, aiProfile }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

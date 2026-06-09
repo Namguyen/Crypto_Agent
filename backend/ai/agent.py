@@ -67,6 +67,31 @@ Reply briefly, clearly, and in a friendly tone in English.
 Do not answer questions unrelated to crypto; avoid politics, religion, violence, and sexual content.
 If asked about your internal workflow or how you operate, do not explain it. Ask the user another crypto-related question instead."""
 
+AI_PROFILE_LABELS = {
+    "experienceLevel": {
+        "beginner": "Beginner. Explain jargon and keep examples simple.",
+        "intermediate": "Intermediate. Use trading concepts, but define less common terms.",
+        "advanced": "Advanced. Be precise, data-oriented, and avoid basic explanations unless asked.",
+    },
+    "communicationStyle": {
+        "casual": "Casual and direct. Plain language is preferred; avoid forced slang.",
+        "direct": "Direct and practical. Lead with the answer and key action points.",
+        "executive": "Executive brief. Lead with decision points, risks, and what changed.",
+        "technical": "Technical. Include structure, assumptions, indicators, and reasoning.",
+        "teacher": "Teacher style. Explain concepts step by step and check assumptions.",
+    },
+    "riskProfile": {
+        "conservative": "Conservative. Emphasize capital preservation, invalidation, and downside risk.",
+        "balanced": "Balanced. Weigh upside, downside, and uncertainty evenly.",
+        "aggressive": "Aggressive. Discuss momentum opportunities, but still state risk clearly.",
+    },
+    "preferredDepth": {
+        "short": "Short. Use concise answers unless the user asks for detail.",
+        "normal": "Normal. Give enough context to be useful without over-explaining.",
+        "detailed": "Detailed. Include rationale, scenarios, and tradeoffs.",
+    },
+}
+
 
 def format_retrieved_notes(retrieved_notes: list[dict] | None) -> str:
     notes = retrieved_notes or []
@@ -84,6 +109,57 @@ def format_retrieved_notes(retrieved_notes: list[dict] | None) -> str:
         if len(content) > 600:
             content = content[:597].rstrip() + "..."
         lines.append(f"- [note:{note.get('id')}] {content}")
+    return "\n".join(lines)
+
+
+def clean_context_text(value: str, max_length: int) -> str:
+    content = " ".join((value or "").split())
+    if len(content) > max_length:
+        return content[: max_length - 3].rstrip() + "..."
+    return content
+
+
+def format_ai_profile(ai_profile: dict | None) -> str:
+    profile = ai_profile or {}
+    lines = [
+        "Private personalization context for this signed-in user:",
+        "Use this to adapt wording, explanation depth, examples, and risk framing. "
+        "Do not stereotype the user, reveal private context unprompted, change facts, or soften uncertainty.",
+    ]
+
+    display_name = clean_context_text(profile.get("displayName", ""), 80)
+    bio = clean_context_text(profile.get("bio", ""), 240)
+    if display_name:
+        lines.append(f"- Display name: {display_name}")
+    if bio:
+        lines.append(f"- Profile bio: {bio}")
+
+    for key, labels in AI_PROFILE_LABELS.items():
+        value = (profile.get(key) or "").strip().lower()
+        if value in labels:
+            lines.append(f"- {labels[value]}")
+
+    goals = clean_context_text(profile.get("goals", ""), 500)
+    favorite_assets = clean_context_text(profile.get("favoriteAssets", ""), 240)
+    if favorite_assets:
+        lines.append(f"- Favorite assets/watchlist: {favorite_assets}")
+    if goals:
+        lines.append(f"- User goals: {goals}")
+
+    return "\n".join(lines) if len(lines) > 2 else ""
+
+
+def format_recent_activity(recent_activity: list[str] | None) -> str:
+    items = [clean_context_text(item, 180) for item in recent_activity or [] if (item or "").strip()]
+    if not items:
+        return ""
+
+    lines = [
+        "Recent private chat topics for this user:",
+        "Use these only for continuity and personalization. Do not assume they are current market facts.",
+    ]
+    for item in items[:5]:
+        lines.append(f"- {item}")
     return "\n".join(lines)
 
 
@@ -138,8 +214,8 @@ def summarize_forum_thread(topic: dict, posts: list[dict]) -> tuple[str, str]:
     return response.choices[0].message.content or "No summary available.", config.model
 
 
-def final_answer_without_tools(conversation: list, config: ChatModeConfig, note_context: str = "") -> str:
-    context_suffix = f"\n\n{note_context}" if note_context else ""
+def final_answer_without_tools(conversation: list, config: ChatModeConfig, private_context: str = "") -> str:
+    context_suffix = f"\n\n{private_context}" if private_context else ""
     response = client.chat.completions.create(
         model=config.model,
         messages=[
@@ -165,11 +241,18 @@ def run_agent(
     conversation: list,
     mode: str = "instant",
     retrieved_notes: list[dict] | None = None,
+    ai_profile: dict | None = None,
+    recent_activity: list[str] | None = None,
 ) -> str:
     """Execute the crypto assistant with mode-specific model and tool settings."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
-    note_context = format_retrieved_notes(retrieved_notes)
-    context_suffix = f"\n\n{note_context}" if note_context else ""
+    context_parts = [
+        format_ai_profile(ai_profile),
+        format_recent_activity(recent_activity),
+        format_retrieved_notes(retrieved_notes),
+    ]
+    private_context = "\n\n".join(part for part in context_parts if part)
+    context_suffix = f"\n\n{private_context}" if private_context else ""
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
 
@@ -196,7 +279,7 @@ def run_agent(
 
         if msg.tool_calls:
             if tool_rounds >= config.max_tool_rounds:
-                final = final_answer_without_tools(conversation, config, note_context)
+                final = final_answer_without_tools(conversation, config, private_context)
                 conversation.append({"role": "assistant", "content": final})
                 return final
 

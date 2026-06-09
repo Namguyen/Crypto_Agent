@@ -61,26 +61,50 @@
     .main-tabs {
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 28px;
       min-width: 0;
     }
     .main-tab {
-      min-width: 104px;
-      height: 48px;
-      border: 1px solid #3a3b45;
-      border-radius: 10px;
-      background: #07080c;
-      color: #f5f6ff;
+      position: relative;
+      min-width: 0;
+      height: 56px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #d6d8e1;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 700;
       cursor: pointer;
+      padding: 0;
     }
     .main-tab:hover,
     .main-tab.active {
-      border-color: #6f61df;
-      background: #0c0d14;
+      border-color: transparent;
+      background: transparent;
       color: #fff;
+    }
+    .main-tab.active::before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #f4c84f;
+      transform: translateX(-50%);
+    }
+    .main-tab.has-caret::after {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(45deg) translateY(-3px);
+      margin-left: 8px;
+      opacity: .9;
     }
     .main-tab-badge {
       display: none;
@@ -864,6 +888,9 @@
       flex-wrap: wrap; flex-shrink: 0;
       order: 2;
     }
+    .qbar.collapsed {
+      display: none;
+    }
     .qbtn {
       font-size: 16px; padding: 6px 14px; border-radius: 999px;
       background: transparent; border: 1px solid #242631;
@@ -951,53 +978,121 @@
     .input-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 46px;
-      grid-template-areas:
-        "input send"
-        "mode mode";
       align-items: center;
       gap: 8px;
-      padding: 2px 16px 22px;
+      padding: 10px 16px 22px;
       border-top: 1px solid #1a1e28;
       flex-shrink: 0;
       order: 3;
     }
     .mode-switch {
-      grid-area: mode;
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 2px;
       width: max-content;
-      margin-left: 12px;
-      padding: 3px;
-      background: #171820;
-      border: 1px solid #3a3b45;
-      border-radius: 10px;
       flex-shrink: 0;
     }
-    .mode-btn {
-      min-width: 72px;
-      height: 28px;
-      border: none;
-      border-radius: 4px;
-      background: transparent;
-      color: #4a5268;
+    .mode-menu-btn {
+      height: 34px;
+      border: 1px solid #22242e;
+      border-radius: 8px;
+      background: #0b0c10;
+      color: #f4f6ff;
       cursor: pointer;
-      font-family: inherit;
-      font-size: 10px;
-      letter-spacing: .04em;
-    }
-    .mode-btn.active {
-      background: #7863ff;
-      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
       font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
     }
-    .mode-btn:disabled {
+    .mode-menu-btn:disabled {
       cursor: not-allowed;
-      opacity: .45;
+      opacity: .55;
+    }
+    .mode-effort {
+      color: #8f938c;
+      font-weight: 600;
+    }
+    .mode-caret {
+      color: #8f938c;
+      font-size: 12px;
+    }
+    .mode-menu {
+      position: absolute;
+      left: 0;
+      bottom: 42px;
+      width: 310px;
+      display: none;
+      padding: 10px;
+      border: 1px solid #494a45;
+      border-radius: 14px;
+      background: #30312d;
+      box-shadow: 0 16px 44px rgba(0,0,0,.4);
+      z-index: 70;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .mode-switch.open .mode-menu {
+      display: block;
+    }
+    .mode-option,
+    .mode-menu-row {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: #f4f4ef;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 10px;
+      border-radius: 8px;
+      text-align: left;
+      font: inherit;
+    }
+    .mode-option {
+      cursor: pointer;
+    }
+    .mode-option:hover,
+    .mode-option.active {
+      background: rgba(255,255,255,.06);
+    }
+    .mode-option-title {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .mode-option-desc {
+      display: block;
+      margin-top: 2px;
+      color: #969890;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+    .mode-check {
+      color: #5d96ff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .mode-menu-separator {
+      height: 1px;
+      margin: 8px 10px;
+      background: #4a4b47;
+    }
+    .mode-menu-row {
+      color: #f4f4ef;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .mode-menu-row span:last-child {
+      color: #969890;
+      font-weight: 600;
     }
     .inp-wrap {
-      grid-area: input;
       flex: 1; display: flex; align-items: center;
+      gap: 12px;
       min-height: 52px;
       background: #2b2c29; border: 1px solid #454844;
       border-radius: 10px; padding: 0 19px; transition: border-color .15s;
@@ -1622,9 +1717,9 @@
     </div>
     <nav class="main-tabs" aria-label="Main workspace">
       <button class="main-tab active" id="mainTabAgent" type="button" onclick="setMainTab('agent')">Agent</button>
-      <button class="main-tab" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
-      <button class="main-tab" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
-      <button class="main-tab" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
+      <button class="main-tab has-caret" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
+      <button class="main-tab has-caret" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
+      <button class="main-tab has-caret" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
     </nav>
     <div class="hdr-right">
       <div class="theme-switch">
@@ -1676,10 +1771,6 @@
             <button class="account-item" type="button" onclick="switchAccount()"><span class="account-icon">S</span><span>Switch account</span></button>
             <button class="account-item" id="authBtn" type="button" onclick="handleAuthClick()"><span class="account-icon">X</span><span id="authBtnLabel">Sign out</span></button>
           </div>
-          <div class="account-section">
-            <button class="account-item" type="button" onclick="setChatMode('instant')"><span class="account-icon">I</span><span>Instant mode</span></button>
-            <button class="account-item" type="button" onclick="setChatMode('reasoning')"><span class="account-icon">R</span><span>Reasoning mode</span></button>
-          </div>
         </div>
       </div>
     </div>
@@ -1716,11 +1807,32 @@
 
       <!-- Input -->
       <div class="input-row">
-        <div class="mode-switch" role="group" aria-label="Chat mode">
-          <button class="mode-btn" id="modeInstant" type="button" title="Fast low-cost answers" onclick="setChatMode('instant')">Instant</button>
-          <button class="mode-btn" id="modeReasoning" type="button" title="Deeper analysis for harder questions" onclick="setChatMode('reasoning')">Reasoning</button>
-        </div>
         <div class="inp-wrap">
+          <div class="mode-switch" id="chatModePicker">
+            <button class="mode-menu-btn" id="modeMenuBtn" type="button" onclick="toggleChatModeMenu(event)" aria-haspopup="menu" aria-expanded="false">
+              <span id="modeMenuLabel">Instant</span>
+              <span class="mode-effort" id="modeMenuEffort">Low</span>
+              <span class="mode-caret">v</span>
+            </button>
+            <div class="mode-menu" id="modeMenu" role="menu">
+              <button class="mode-option" id="modeOptionInstant" type="button" onclick="setChatModeFromMenu('instant')">
+                <span>
+                  <span class="mode-option-title">Instant</span>
+                  <span class="mode-option-desc">Fastest for quick answers</span>
+                </span>
+                <span class="mode-check" id="modeCheckInstant"></span>
+              </button>
+              <button class="mode-option" id="modeOptionReasoning" type="button" onclick="setChatModeFromMenu('reasoning')">
+                <span>
+                  <span class="mode-option-title">Reasoning</span>
+                  <span class="mode-option-desc">Deeper analysis for harder questions</span>
+                </span>
+                <span class="mode-check" id="modeCheckReasoning"></span>
+              </button>
+              <div class="mode-menu-separator"></div>
+              <div class="mode-menu-row"><span>Effort</span><span id="modeEffortLabel">Low</span></div>
+            </div>
+          </div>
           <input class="inp" id="inp" type="text"
             placeholder="Ask a question, look up prices, market news..." autocomplete="off" />
         </div>
@@ -1890,8 +2002,10 @@ let directChatState = { conversation: null, messages: [] };
 let messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
 let messageTabPoll = null;
 let recommendationState = [];
+let recommendationChipsDismissed = false;
 let mainTab = 'agent';
 let activeMarketSymbol = 'BTC';
+let authSessionVersion = 0;
 let directChatMinimized = false;
 let directChatPosition = null;
 let directChatDrag = null;
@@ -2153,16 +2267,48 @@ function setChatMode(mode) {
   renderChatMode();
 }
 
-function renderChatMode() {
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.classList.remove('active');
-    btn.disabled = busy;
-  });
+function toggleChatModeMenu(event) {
+  event?.stopPropagation();
+  if (busy) return;
+  const picker = document.getElementById('chatModePicker');
+  const button = document.getElementById('modeMenuBtn');
+  if (!picker || !button) return;
+  const open = !picker.classList.contains('open');
+  picker.classList.toggle('open', open);
+  button.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 
-  const active = chatMode === 'reasoning'
-    ? document.getElementById('modeReasoning')
-    : document.getElementById('modeInstant');
-  if (active) active.classList.add('active');
+function closeChatModeMenu() {
+  document.getElementById('chatModePicker')?.classList.remove('open');
+  document.getElementById('modeMenuBtn')?.setAttribute('aria-expanded', 'false');
+}
+
+function setChatModeFromMenu(mode) {
+  setChatMode(mode);
+  closeChatModeMenu();
+  document.getElementById('inp')?.focus();
+}
+
+function renderChatMode() {
+  const isReasoning = chatMode === 'reasoning';
+  const label = document.getElementById('modeMenuLabel');
+  const effort = document.getElementById('modeMenuEffort');
+  const effortLabel = document.getElementById('modeEffortLabel');
+  const button = document.getElementById('modeMenuBtn');
+  const instant = document.getElementById('modeOptionInstant');
+  const reasoning = document.getElementById('modeOptionReasoning');
+  const instantCheck = document.getElementById('modeCheckInstant');
+  const reasoningCheck = document.getElementById('modeCheckReasoning');
+
+  if (label) label.textContent = isReasoning ? 'Reasoning' : 'Instant';
+  if (effort) effort.textContent = isReasoning ? 'High' : 'Low';
+  if (effortLabel) effortLabel.textContent = isReasoning ? 'High' : 'Low';
+  if (button) button.disabled = busy;
+  instant?.classList.toggle('active', !isReasoning);
+  reasoning?.classList.toggle('active', isReasoning);
+  if (instantCheck) instantCheck.textContent = isReasoning ? '' : 'Selected';
+  if (reasoningCheck) reasoningCheck.textContent = isReasoning ? 'Selected' : '';
+  if (busy) closeChatModeMenu();
 }
 
 function fmtNotificationTime(epoch) {
@@ -3441,6 +3587,7 @@ async function handleAuthClick() {
   try {
     await authFetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' }, false);
   } finally {
+    authSessionVersion += 1;
     stopNotificationPolling();
     stopMessageTabPolling();
     accessToken = null;
@@ -3451,9 +3598,10 @@ async function handleAuthClick() {
     friendState = { friends: [], sent: [], received: [], searchResults: [] };
     directChatState = { conversation: null, messages: [] };
     messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
-    recommendationState = fallbackRecommendations();
+    recommendationState = [];
     directChatMinimized = false;
     localStorage.removeItem('cryptoAgentDirectConversation');
+    resetAgentChat();
     closeAccountMenu();
     closeToolPanels();
     renderAuthState();
@@ -3497,21 +3645,35 @@ function fmt(t) {
     .replace(/\n/g, '<br>');
 }
 
-function fallbackRecommendations() {
-  return [
-    { label: 'BTC analysis', prompt: 'BTC price and trend analysis', source: 'fallback' },
-    { label: 'latest news', prompt: 'Latest crypto news today', source: 'fallback' },
-    { label: 'top movers', prompt: 'Top gainers and losers today', source: 'fallback' },
-    { label: 'risk check', prompt: 'Help me build a risk checklist for my current crypto watchlist.', source: 'fallback' },
-    { label: 'watchlist', prompt: 'Build a crypto watchlist from my recent interests.', source: 'fallback' },
-  ];
+function initialAgentMessageHtml() {
+  return `
+    <div class="msg msg-a">
+      <div class="lbl">CRYPTO AGENT</div>
+      <div class="bbl bbl-a">
+        Online. Ask me about <strong>prices</strong>, market trends, or on-chain data.
+      </div>
+    </div>
+  `;
+}
+
+function resetAgentChat() {
+  hist = [];
+  busy = false;
+  recommendationChipsDismissed = false;
+  const input = document.getElementById('inp');
+  if (input) input.value = '';
+  const messages = document.getElementById('msgs');
+  if (messages) messages.innerHTML = initialAgentMessageHtml();
+  renderRecommendations();
+  syncChatControls();
 }
 
 function renderRecommendations() {
   const root = document.getElementById('recommendationChips');
   if (!root) return;
 
-  const items = (recommendationState.length ? recommendationState : fallbackRecommendations()).slice(0, 6);
+  const items = recommendationState.slice(0, 6);
+  root.classList.toggle('collapsed', recommendationChipsDismissed || !items.length);
   root.innerHTML = items.map(item => {
     const label = item.label || item.prompt || 'Ask AI';
     const prompt = item.prompt || label;
@@ -3522,20 +3684,25 @@ function renderRecommendations() {
 
 async function loadRecommendations() {
   if (!authState.authenticated) {
-    recommendationState = fallbackRecommendations();
+    recommendationState = [];
     renderRecommendations();
     return;
   }
 
   try {
-    const res = await authFetch(`${API_RECOMMENDATIONS}?limit=6`);
+    const res = await authFetch(`${API_RECOMMENDATIONS}?limit=6&_=${Date.now()}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load recommendations');
     recommendationState = Array.isArray(data.recommendations) ? data.recommendations : [];
   } catch (e) {
-    recommendationState = fallbackRecommendations();
+    recommendationState = [];
     console.error(e);
   }
+  renderRecommendations();
+}
+
+function hideRecommendationChipsForSession() {
+  recommendationChipsDismissed = true;
   renderRecommendations();
 }
 
@@ -3580,6 +3747,8 @@ async function send() {
   const txt = el.value.trim();
   if (!txt) return;
   el.value = '';
+  const requestSessionVersion = authSessionVersion;
+  hideRecommendationChipsForSession();
 
   hist.push({ role: 'user', content: txt });
   addMsg('user', txt);
@@ -3599,10 +3768,17 @@ async function send() {
 
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
+      authSessionVersion += 1;
       accessToken = null;
       authState.authenticated = false;
       authState.user = null;
+      recommendationState = [];
+      resetAgentChat();
       renderAuthState();
+    }
+    if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
+      loader.remove();
+      return;
     }
     if (!res.ok) throw new Error(data.error || 'Chat request failed');
 
@@ -3611,12 +3787,18 @@ async function send() {
     
     loader.remove();
     addMsg('assistant', reply);
+    loadRecommendations();
 
   } catch (e) {
+    if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
+      loader.remove();
+      return;
+    }
     loader.querySelector('.bbl').textContent = e.message || 'Connection failed. Please try again.';
     console.error(e);
   }
 
+  if (requestSessionVersion !== authSessionVersion || !authState.authenticated) return;
   busy = false;
   syncChatControls();
   document.getElementById('inp').focus();
@@ -3638,11 +3820,14 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeToolPanels();
     closeAccountMenu();
+    closeChatModeMenu();
   }
 });
 window.addEventListener('click', e => {
   const authWrap = document.getElementById('authWrap');
   if (authWrap && !authWrap.contains(e.target)) closeAccountMenu();
+  const modePicker = document.getElementById('chatModePicker');
+  if (modePicker && !modePicker.contains(e.target)) closeChatModeMenu();
 });
 window.addEventListener('pointermove', moveDirectChat);
 window.addEventListener('pointerup', stopDirectChatDrag);
