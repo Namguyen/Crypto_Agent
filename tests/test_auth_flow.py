@@ -164,9 +164,10 @@ class AuthFlowTest(unittest.TestCase):
             index = client.get("/")
             self.assertEqual(index.status_code, 200)
             self.assertIn('id="msgs"', index.text)
-            self.assertIn("Online. Ask me about", index.text)
-            self.assertIn('class="brand-mark">Coin', index.text)
+            self.assertNotIn("Online. Ask me about", index.text)
+            self.assertNotIn('class="brand-mark">Coin', index.text)
             self.assertIn('id="mainTabAgent"', index.text)
+            self.assertIn('id="mainTabPortfolio"', index.text)
             self.assertIn('id="mainTabMessages"', index.text)
             self.assertIn('id="mainTabFriends"', index.text)
             self.assertIn('id="mainTabNotes"', index.text)
@@ -184,8 +185,27 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="messagesUnreadCount"', index.text)
             self.assertIn('id="friendsView"', index.text)
             self.assertIn('id="friendSearchResults"', index.text)
+            self.assertIn('id="portfolioView"', index.text)
+            self.assertIn('id="portfolioPrompt"', index.text)
+            self.assertIn('id="portfolioDraftTable"', index.text)
+            self.assertIn('id="portfolioHoldings"', index.text)
+            self.assertIn('id="portfolioChart"', index.text)
+            self.assertIn('id="portfolioRefreshBtn"', index.text)
+            self.assertIn("API_PORTFOLIO", index.text)
+            self.assertIn("loadPortfolio", index.text)
+            self.assertIn("parsePortfolioPrompt", index.text)
+            self.assertIn("refreshPortfolio", index.text)
             self.assertIn("MESSAGE_TAB_POLL_MS", index.text)
+            self.assertIn("NOTIFICATION_POLL_MS", index.text)
             self.assertIn("messageTabUnreadTotal", index.text)
+            self.assertIn("connectMessageTabSocket", index.text)
+            self.assertIn("messageTabSocket", index.text)
+            self.assertIn("normalizeMessageTabMessage", index.text)
+            self.assertIn("applyMessageBackgroundNotifications", index.text)
+            self.assertIn("API_PRICE_DATA", index.text)
+            self.assertIn("API_AGENT_GREETING", index.text)
+            self.assertIn("loadAgentGreeting", index.text)
+            self.assertIn("DEFAULT_MARKET_SYMBOLS", index.text)
             self.assertIn("API_RECOMMENDATIONS", index.text)
             self.assertIn("loadRecommendations", index.text)
             self.assertIn("CHECK NOW", index.text)
@@ -292,6 +312,99 @@ class AuthFlowTest(unittest.TestCase):
         self.assertEqual(seed_notes.status_code, 200)
         self.assertEqual(seed_notes.json()["notes"][0]["content"], "seed-only datapoint")
 
+    def test_portfolio_parse_holdings_refresh_and_scope(self):
+        market_payload = {
+            "bitcoin": {"usd": 70000, "usd_24h_change": 2.0, "source": "test"},
+            "ethereum": {"usd": 3000, "usd_24h_change": -1.0, "source": "test"},
+        }
+
+        with TestClient(self.app) as client, patch("backend.app.fetch_market_prices", return_value=market_payload) as prices:
+            unauthenticated = client.get("/api/portfolio")
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(client.post("/api/portfolio/parse", json={"text": "1 BTC at 1"}).status_code, 401)
+            self.assertEqual(
+                client.post(
+                    "/api/portfolio/holdings",
+                    json={"holdings": [{"symbol": "BTC", "quantity": 1, "averageCostUsd": 1}]},
+                ).status_code,
+                401,
+            )
+            self.assertEqual(client.post("/api/portfolio/refresh").status_code, 401)
+            self.assertEqual(client.delete("/api/portfolio/holdings/BTC").status_code, 401)
+
+            owner_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "portfolio_owner",
+                    "email": "portfolio-owner@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(owner_register.status_code, 201)
+            owner_headers = {"Authorization": f"Bearer {owner_register.json()['accessToken']}"}
+
+            parsed = client.post(
+                "/api/portfolio/parse",
+                json={"text": "I bought 0.5 BTC at 65000 and 3 ETH at 3200 and 4 ABC at 1"},
+                headers=owner_headers,
+            )
+            self.assertEqual(parsed.status_code, 200)
+            draft = parsed.json()["draft"]
+            valid_rows = [row for row in draft if row["valid"]]
+            invalid_rows = [row for row in draft if not row["valid"]]
+            self.assertEqual([row["symbol"] for row in valid_rows], ["BTC", "ETH"])
+            self.assertEqual(invalid_rows[0]["symbol"], "ABC")
+            self.assertIn("Unsupported crypto symbol", invalid_rows[0]["error"])
+
+            saved = client.post(
+                "/api/portfolio/holdings",
+                json={
+                    "holdings": [
+                        {
+                            "symbol": row["symbol"],
+                            "quantity": row["quantity"],
+                            "averageCostUsd": row["averageCostUsd"],
+                        }
+                        for row in valid_rows
+                    ]
+                },
+                headers=owner_headers,
+            )
+            self.assertEqual(saved.status_code, 200)
+            self.assertEqual(len(saved.json()["holdings"]), 2)
+            self.assertEqual(len(saved.json()["snapshots"]), 1)
+            self.assertAlmostEqual(saved.json()["summary"]["totalCostUsd"], 42100.0)
+
+            refresh = client.post("/api/portfolio/refresh", headers=owner_headers)
+            self.assertEqual(refresh.status_code, 200)
+            prices.assert_called()
+            refreshed = refresh.json()
+            by_symbol = {holding["symbol"]: holding for holding in refreshed["holdings"]}
+            self.assertAlmostEqual(by_symbol["BTC"]["currentValueUsd"], 35000.0)
+            self.assertAlmostEqual(by_symbol["ETH"]["currentValueUsd"], 9000.0)
+            self.assertAlmostEqual(refreshed["summary"]["totalCostUsd"], 42100.0)
+            self.assertAlmostEqual(refreshed["summary"]["totalValueUsd"], 44000.0)
+            self.assertAlmostEqual(refreshed["summary"]["totalPlUsd"], 1900.0)
+            self.assertGreaterEqual(len(refreshed["snapshots"]), 2)
+
+            other_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "portfolio_other",
+                    "email": "portfolio-other@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(other_register.status_code, 201)
+            other_headers = {"Authorization": f"Bearer {other_register.json()['accessToken']}"}
+            other_portfolio = client.get("/api/portfolio", headers=other_headers)
+            self.assertEqual(other_portfolio.status_code, 200)
+            self.assertEqual(other_portfolio.json()["holdings"], [])
+
+            deleted = client.delete("/api/portfolio/holdings/BTC", headers=owner_headers)
+            self.assertEqual(deleted.status_code, 200)
+            self.assertEqual([holding["symbol"] for holding in deleted.json()["holdings"]], ["ETH"])
+
     def test_note_retrieval_is_user_scoped_and_passed_to_agent(self):
         from backend.ai.retrieval import retrieve_user_notes
 
@@ -374,6 +487,78 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(ai_profile["communicationStyle"], "technical")
             self.assertEqual(ai_profile["riskProfile"], "conservative")
             self.assertEqual(run_agent.call_args.kwargs["recent_activity"], [])
+
+    def test_agent_greeting_uses_user_profile_context(self):
+        with TestClient(self.app) as client:
+            register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "greetinguser",
+                    "email": "greetinguser@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(register.status_code, 201)
+            headers = {"Authorization": f"Bearer {register.json()['accessToken']}"}
+
+            profile = client.patch(
+                "/api/users/me",
+                json={
+                    "displayName": "Greeting Trader",
+                    "bio": "",
+                    "picture": "",
+                    "aiProfile": {
+                        "experienceLevel": "intermediate",
+                        "communicationStyle": "direct",
+                        "riskProfile": "balanced",
+                        "preferredDepth": "normal",
+                        "favoriteAssets": "BTC, SOL",
+                        "goals": "Build cleaner swing trade plans.",
+                    },
+                },
+                headers=headers,
+            )
+            self.assertEqual(profile.status_code, 200)
+
+            greeting = client.get("/api/agent/greeting", headers=headers)
+            self.assertEqual(greeting.status_code, 200)
+            self.assertIn("BTC, SOL", greeting.json()["message"])
+            self.assertEqual(greeting.json()["source"], "ai-profile")
+            self.assertEqual(greeting.json()["style"], "direct")
+
+            executive_register = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "greetingexec",
+                    "email": "greetingexec@example.com",
+                    "password": "password123",
+                },
+            )
+            self.assertEqual(executive_register.status_code, 201)
+            executive_headers = {"Authorization": f"Bearer {executive_register.json()['accessToken']}"}
+            executive_profile = client.patch(
+                "/api/users/me",
+                json={
+                    "displayName": "Executive Trader",
+                    "bio": "",
+                    "picture": "",
+                    "aiProfile": {
+                        "experienceLevel": "advanced",
+                        "communicationStyle": "executive",
+                        "riskProfile": "balanced",
+                        "preferredDepth": "short",
+                        "favoriteAssets": "BTC, SOL",
+                        "goals": "Build cleaner swing trade plans.",
+                    },
+                },
+                headers=executive_headers,
+            )
+            self.assertEqual(executive_profile.status_code, 200)
+            executive_greeting = client.get("/api/agent/greeting", headers=executive_headers)
+            self.assertEqual(executive_greeting.status_code, 200)
+            self.assertEqual(executive_greeting.json()["style"], "executive")
+            self.assertIn("BTC, SOL", executive_greeting.json()["message"])
+            self.assertNotEqual(greeting.json()["message"], executive_greeting.json()["message"])
 
     def test_recommendations_follow_user_context(self):
         with TestClient(self.app) as client:
@@ -726,6 +911,27 @@ class AuthFlowTest(unittest.TestCase):
         self.assertAlmostEqual(prices["bitcoin"]["usd_24h_change"], (3000 / 70000) * 100)
         self.assertEqual(prices["binancecoin"]["source"], "coingecko")
         self.assertEqual(prices["binancecoin"]["usd_24h_change"], 3.4)
+
+    def test_price_data_endpoint_returns_backend_market_rows(self):
+        from backend import app as backend_app
+
+        backend_app.market_price_cache["checked_at"] = 0
+        backend_app.market_price_cache["prices"] = []
+        market_payload = {
+            "bitcoin": {"usd": 73000, "usd_24h_change": 2.5, "source": "test-provider"},
+            "ethereum": {"usd": 2100, "usd_24h_change": -1.2, "source": "test-provider"},
+        }
+
+        with TestClient(self.app) as client, patch("backend.app.fetch_market_prices", return_value=market_payload):
+            res = client.get("/api/price-data")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["live"])
+        rows = {row["symbol"]: row for row in res.json()["prices"]}
+        self.assertEqual(rows["BTC"]["price"], 73000)
+        self.assertEqual(rows["BTC"]["changePercent"], 2.5)
+        self.assertEqual(rows["BTC"]["source"], "test-provider")
+        self.assertEqual(rows["ETH"]["usd_24h_change"], -1.2)
 
     def test_user_search_and_friend_requests(self):
         with TestClient(self.app) as client:

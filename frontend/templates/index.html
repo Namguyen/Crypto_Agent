@@ -42,22 +42,6 @@
       flex-shrink: 0;
     }
     .hdr-left { display: flex; align-items: center; gap: 10px; }
-    .amber-dot { width: 8px; height: 8px; border-radius: 50%; background: #7863ff; flex-shrink: 0; }
-    .brand { font-size: 16px; letter-spacing: 0; color: #f4f6ff; font-weight: 700; }
-    .brand .brand-mark {
-      color: #f4f6ff;
-      position: relative;
-    }
-    .brand .brand-mark::after {
-      content: '';
-      position: absolute;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #7863ff;
-      left: 8px;
-      top: 7px;
-    }
     .main-tabs {
       display: flex;
       align-items: center;
@@ -159,6 +143,7 @@
     body[data-theme="light"] .chat-col,
     body[data-theme="light"] .messages-col,
     body[data-theme="light"] .friends-workspace,
+    body[data-theme="light"] .portfolio-workspace,
     body[data-theme="light"] .notebook-col {
       background: #f7f8fb;
       color: #20232c;
@@ -745,6 +730,202 @@
       border-radius: 10px;
       background: #0b0d11;
       padding: 14px;
+    }
+    .portfolio-workspace {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #05060a;
+      overflow: hidden;
+    }
+    .portfolio-workspace.collapsed {
+      display: none;
+    }
+    .portfolio-body {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 16px;
+      padding: 18px 22px;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .portfolio-card {
+      min-height: 0;
+      overflow-y: auto;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      background: #0b0d11;
+      padding: 14px;
+    }
+    .portfolio-card-title {
+      color: #f4f6ff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .portfolio-help {
+      color: #6b7488;
+      font-size: 11px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .portfolio-prompt {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      border: 1px solid #1e2330;
+      border-radius: 8px;
+      background: #0f1219;
+      color: #c8cdd8;
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.45;
+      padding: 10px;
+      outline: none;
+    }
+    .portfolio-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .portfolio-button {
+      border: 1px solid #1e2330;
+      border-radius: 7px;
+      background: #0f1219;
+      color: #ef9f27;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: .05em;
+      padding: 8px 10px;
+      white-space: nowrap;
+    }
+    .portfolio-button.primary {
+      background: #211b51;
+      border-color: #393063;
+      color: #d9d2ff;
+    }
+    .portfolio-button.danger {
+      color: #ff7b7b;
+    }
+    .portfolio-button:disabled {
+      cursor: not-allowed;
+      opacity: .45;
+    }
+    .portfolio-button:not(:disabled):hover {
+      border-color: rgba(239,159,39,.55);
+    }
+    .portfolio-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid #1a1e28;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+    .portfolio-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 540px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .portfolio-table th,
+    .portfolio-table td {
+      border-bottom: 1px solid #1a1e28;
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .portfolio-table th {
+      color: #6b7488;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      background: #0f1219;
+    }
+    .portfolio-table tr:last-child td {
+      border-bottom: 0;
+    }
+    .portfolio-table input {
+      width: 100px;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      background: #05060a;
+      color: #c8cdd8;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 6px;
+      outline: none;
+    }
+    .portfolio-symbol {
+      color: #f4f6ff;
+      font-weight: 800;
+    }
+    .portfolio-error {
+      color: #ff7b7b;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .portfolio-empty {
+      color: #6b7488;
+      background: #0f1219;
+      border: 1px solid #1a1e28;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 10px;
+    }
+    .portfolio-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .portfolio-metric {
+      border: 1px solid #1a1e28;
+      border-radius: 8px;
+      background: #0f1219;
+      padding: 10px;
+    }
+    .portfolio-metric-label {
+      color: #6b7488;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .portfolio-metric-value {
+      color: #f4f6ff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .portfolio-positive { color: #42c981; }
+    .portfolio-negative { color: #ff6b6b; }
+    .portfolio-chart {
+      min-height: 220px;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      background: #0f1219;
+      padding: 12px;
+      overflow: hidden;
+    }
+    .portfolio-chart svg {
+      width: 100%;
+      height: 220px;
+      display: block;
+    }
+    .portfolio-chart-note {
+      color: #6b7488;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 8px;
     }
     /* Notebook toggle button */
     .tool-btn,
@@ -1712,11 +1893,10 @@
 <div class="root" id="root">
   <!-- Header -->
   <div class="hdr">
-    <div class="hdr-left">
-      <span class="brand"><span class="brand-mark">Coin</span></span>
-    </div>
+    <div class="hdr-left" aria-hidden="true"></div>
     <nav class="main-tabs" aria-label="Main workspace">
       <button class="main-tab active" id="mainTabAgent" type="button" onclick="setMainTab('agent')">Agent</button>
+      <button class="main-tab has-caret" id="mainTabPortfolio" type="button" onclick="setMainTab('portfolio')">Portfolio</button>
       <button class="main-tab has-caret" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
       <button class="main-tab has-caret" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
       <button class="main-tab has-caret" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
@@ -1742,6 +1922,7 @@
           <div class="notif-list" id="notifList">
             <div class="notif-empty">Login to view price alerts.</div>
           </div>
+          <div class="notif-empty">Market checks use backend fallbacks: Binance, Binance.US, Coinbase, then CoinGecko.</div>
           <div class="notif-settings" id="notifSettings"></div>
         </div>
       </div>
@@ -1785,18 +1966,11 @@
     <!-- Chat area (Center) -->
     <div class="chat-col workspace-view" id="agentView">
       <div class="agent-head">
-        <div class="agent-title">Crypto agent</div>
-        <div class="agent-subtitle">Ask about prices, trends, or on-chain data</div>
+        <div class="agent-title" id="agentTitle">Crypto agent</div>
+        <div class="agent-subtitle" id="agentSubtitle">Personalized market workspace</div>
       </div>
       <!-- Messages -->
-      <div class="msgs" id="msgs">
-        <div class="msg msg-a">
-          <div class="lbl">CRYPTO AGENT</div>
-          <div class="bbl bbl-a">
-            Online. Ask me about <strong>prices</strong>, market trends, or on-chain data.
-          </div>
-        </div>
-      </div>
+      <div class="msgs" id="msgs"></div>
 
       <!-- Quick commands -->
       <div class="qbar" id="recommendationChips">
@@ -1843,6 +2017,40 @@
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
+      </div>
+    </div>
+
+    <div class="portfolio-workspace collapsed" id="portfolioView">
+      <div class="workspace-head">
+        <div class="workspace-title">Portfolio</div>
+        <div class="workspace-subtitle">Track crypto holdings, cost basis, live value, and portfolio chart snapshots.</div>
+      </div>
+      <div class="portfolio-body">
+        <div class="portfolio-card">
+          <div class="portfolio-card-title">Add holdings from text</div>
+          <div class="portfolio-help">Example: I bought 0.5 BTC at 65000 and 3 ETH at 3200.</div>
+          <textarea class="portfolio-prompt" id="portfolioPrompt" placeholder="Describe your crypto buys here..."></textarea>
+          <div class="portfolio-actions">
+            <button class="portfolio-button primary" id="portfolioParseBtn" type="button" onclick="parsePortfolioPrompt()">PARSE</button>
+            <button class="portfolio-button" id="portfolioSaveBtn" type="button" onclick="savePortfolioDraft()" disabled>SAVE REVIEWED HOLDINGS</button>
+          </div>
+          <div id="portfolioDraftErrors"></div>
+          <div id="portfolioDraftTable">
+            <div class="portfolio-empty">Parsed holdings will appear here for review before saving.</div>
+          </div>
+        </div>
+        <div class="portfolio-card">
+          <div class="portfolio-actions" style="justify-content:space-between; margin-top:0; margin-bottom:12px">
+            <div class="portfolio-card-title" style="margin-bottom:0">Portfolio value</div>
+            <button class="portfolio-button primary" id="portfolioRefreshBtn" type="button" onclick="refreshPortfolio()">REFRESH PRICES</button>
+          </div>
+          <div id="portfolioSummary" class="portfolio-summary"></div>
+          <div class="portfolio-chart" id="portfolioChart"></div>
+          <div class="portfolio-chart-note">Chart points are saved on holding saves and refreshes.</div>
+          <div id="portfolioHoldings">
+            <div class="portfolio-empty">Login and save holdings to see your portfolio.</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1949,18 +2157,22 @@ const API_NOTES = '/api/notes';
 const API_NOTIFICATIONS = '/api/notifications';
 const API_NOTIFICATIONS_CHECK = '/api/notifications/check';
 const API_NOTIFICATIONS_READ = '/api/notifications/read';
+const API_PRICE_DATA = '/api/price-data';
 const API_USER_SEARCH = '/api/users/search';
 const API_USER_ME = '/api/users/me';
 const API_FRIENDS = '/api/friends';
 const API_FRIEND_REQUESTS = '/api/friends/requests';
 const API_CONVERSATIONS = '/api/conversations';
+const API_AGENT_GREETING = '/api/agent/greeting';
 const API_RECOMMENDATIONS = '/api/recommendations';
+const API_PORTFOLIO = '/api/portfolio';
 const AUTH_LOGIN = '/login';
 const AUTH_REGISTER = '/register';
 const AUTH_LOGOUT = '/api/auth/logout';
 const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
 const LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
-const MESSAGE_TAB_POLL_MS = 15000;
+const MESSAGE_TAB_POLL_MS = 5000;
+const NOTIFICATION_POLL_MS = 60000;
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -1990,8 +2202,9 @@ const COIN_NAMES = {
   LTC: 'Litecoin',
 };
 
+const DEFAULT_MARKET_SYMBOLS = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOGE', 'LINK', 'DOT', 'LTC'];
 
-let P = {};
+let P = Object.fromEntries(DEFAULT_MARKET_SYMBOLS.map(symbol => [symbol, { p: null, c: null, d: 0 }]));
 let hist = [];
 let busy = false;
 let chatMode = localStorage.getItem('cryptoAgentChatMode') || 'instant';
@@ -2001,8 +2214,14 @@ let friendState = { friends: [], sent: [], received: [], searchResults: [] };
 let directChatState = { conversation: null, messages: [] };
 let messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
 let messageTabPoll = null;
+let messageTabSocket = null;
+let messageTabReconnectTimer = null;
+let messageNotificationSeen = new Map();
+let messageNotificationInitial = true;
 let recommendationState = [];
+let portfolioState = { holdings: [], snapshots: [], summary: null, draft: [], errors: [], error: '' };
 let recommendationChipsDismissed = false;
+let agentGreetingText = '';
 let mainTab = 'agent';
 let activeMarketSymbol = 'BTC';
 let authSessionVersion = 0;
@@ -2052,11 +2271,12 @@ function toggleTheme() {
 }
 
 function setMainTab(tab) {
-  if (!['agent', 'messages', 'friends', 'notes'].includes(tab)) tab = 'agent';
+  if (!['agent', 'portfolio', 'messages', 'friends', 'notes'].includes(tab)) tab = 'agent';
   mainTab = tab;
 
   const viewMap = {
     agent: 'agentView',
+    portfolio: 'portfolioView',
     messages: 'messagesCol',
     friends: 'friendsView',
     notes: 'nbCol',
@@ -2067,6 +2287,7 @@ function setMainTab(tab) {
 
   const tabMap = {
     agent: 'mainTabAgent',
+    portfolio: 'mainTabPortfolio',
     messages: 'mainTabMessages',
     friends: 'mainTabFriends',
     notes: 'mainTabNotes',
@@ -2077,6 +2298,8 @@ function setMainTab(tab) {
 
   closeAccountMenu();
   if (tab === 'messages') loadMessageTab();
+  else closeMessageTabSocket();
+  if (tab === 'portfolio') loadPortfolio();
   if (tab === 'friends') loadFriends();
   if (tab === 'notes') loadNotes();
   syncRootWidth();
@@ -2627,6 +2850,93 @@ function messageTabConversationPreview(conversation) {
   return `${prefix}${last.content || ''}`;
 }
 
+function messageTabLastMessageId(conversation) {
+  return String(conversation?.lastMessage?.id || conversation?.lastMessageId || '');
+}
+
+function applyMessageBackgroundNotifications(conversations, initial = false) {
+  for (const conversation of conversations || []) {
+    const conversationId = String(conversation?.id || '');
+    const lastId = messageTabLastMessageId(conversation);
+    if (!conversationId || !lastId) continue;
+
+    const previousId = messageNotificationSeen.get(conversationId);
+    messageNotificationSeen.set(conversationId, lastId);
+
+    const unread = Number(conversation.unreadCount || 0);
+    const last = conversation.lastMessage || {};
+    const isActiveOpen =
+      mainTab === 'messages' &&
+      String(messageTabState.activeConversation?.id || '') === conversationId &&
+      isPanelOpen('messagesCol');
+    if (initial || !previousId || previousId === lastId || last.isOwn || unread < 1 || isActiveOpen) {
+      continue;
+    }
+
+    notifyUser(
+      `New message from ${messageTabConversationName(conversation)}`,
+      last.content || 'Open Messages to reply.',
+      `direct-message-${conversationId}`
+    );
+  }
+}
+
+function normalizeMessageTabMessage(message) {
+  return {
+    ...message,
+    isOwn: String(message?.senderId || '') === String(authState.user?.id || ''),
+  };
+}
+
+function messageTabLastMessageFromMessage(message) {
+  const normalized = normalizeMessageTabMessage(message);
+  return {
+    id: normalized.id,
+    content: normalized.content,
+    senderId: normalized.senderId,
+    createdAt: normalized.createdAt,
+    isOwn: normalized.isOwn,
+  };
+}
+
+function upsertMessageTabConversationLastMessage(message) {
+  const conversationId = String(message?.conversationId || '');
+  if (!conversationId) return;
+  const lastMessage = messageTabLastMessageFromMessage(message);
+  messageTabState.conversations = (messageTabState.conversations || []).map(conversation => {
+    if (String(conversation.id) !== conversationId) return conversation;
+    return { ...conversation, lastMessage, lastMessageAt: lastMessage.createdAt || conversation.lastMessageAt };
+  });
+  if (String(messageTabState.activeConversation?.id || '') === conversationId) {
+    messageTabState.activeConversation = {
+      ...messageTabState.activeConversation,
+      lastMessage,
+      lastMessageAt: lastMessage.createdAt || messageTabState.activeConversation.lastMessageAt,
+    };
+  }
+}
+
+async function addOrReplaceMessageTabMessage(message, options = {}) {
+  if (!message?.id) return;
+  const normalized = normalizeMessageTabMessage(message);
+  const activeId = String(messageTabState.activeConversation?.id || '');
+  if (activeId && String(normalized.conversationId || '') !== activeId) return;
+
+  const index = messageTabState.messages.findIndex(item => String(item.id) === String(normalized.id));
+  if (index >= 0) messageTabState.messages[index] = normalized;
+  else messageTabState.messages.push(normalized);
+  upsertMessageTabConversationLastMessage(normalized);
+
+  if (options.markRead && !normalized.isOwn && isPanelOpen('messagesCol') && document.visibilityState === 'visible') {
+    await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(normalized.conversationId)}/read`, { method: 'POST' }, false);
+    messageTabState.conversations = (messageTabState.conversations || []).map(conversation =>
+      String(conversation.id) === String(normalized.conversationId) ? { ...conversation, unreadCount: 0 } : conversation
+    );
+  }
+  messageTabState.unreadCount = messageTabUnreadTotal(messageTabState.conversations);
+  renderMessageTab();
+}
+
 function renderMessageBadge() {
   const count = document.getElementById('messagesUnreadCount');
   if (!count) return;
@@ -2708,6 +3018,8 @@ async function refreshMessageConversations() {
   if (!res.ok) throw new Error(data.error || 'Could not load messages');
 
   const conversations = data.conversations || [];
+  applyMessageBackgroundNotifications(conversations, messageNotificationInitial);
+  messageNotificationInitial = false;
   messageTabState.conversations = conversations;
   messageTabState.unreadCount = messageTabUnreadTotal(conversations);
 
@@ -2715,6 +3027,8 @@ async function refreshMessageConversations() {
   if (activeId) {
     messageTabState.activeConversation = conversations.find(conversation => String(conversation.id) === String(activeId)) || null;
     if (!messageTabState.activeConversation) messageTabState.messages = [];
+  } else if (isPanelOpen('messagesCol') && conversations.length) {
+    messageTabState.activeConversation = conversations.find(conversation => Number(conversation.unreadCount || 0) > 0) || conversations[0];
   }
 }
 
@@ -2729,7 +3043,7 @@ async function loadMessageConversationMessages(options = {}) {
   const res = await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/messages`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Could not load conversation');
-  messageTabState.messages = data.messages || [];
+  messageTabState.messages = (data.messages || []).map(normalizeMessageTabMessage);
 
   if (markRead) {
     await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/read`, { method: 'POST' }, false);
@@ -2740,9 +3054,63 @@ async function loadMessageConversationMessages(options = {}) {
   renderMessageTab();
 }
 
+function messageTabWebSocketUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const conversation = messageTabState.activeConversation;
+  return `${protocol}//${window.location.host}${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/ws?token=${encodeURIComponent(accessToken || '')}`;
+}
+
+function closeMessageTabSocket(clearReconnect = true) {
+  if (clearReconnect && messageTabReconnectTimer) {
+    clearTimeout(messageTabReconnectTimer);
+    messageTabReconnectTimer = null;
+  }
+  if (messageTabSocket) {
+    messageTabSocket.onclose = null;
+    messageTabSocket.close();
+    messageTabSocket = null;
+  }
+}
+
+async function connectMessageTabSocket() {
+  const conversation = messageTabState.activeConversation;
+  if (!authState.authenticated || !conversation?.id || !isPanelOpen('messagesCol')) {
+    closeMessageTabSocket();
+    return;
+  }
+  if (!accessToken && !await refreshAccessToken()) return;
+
+  const conversationId = String(conversation.id);
+  closeMessageTabSocket(false);
+  messageTabSocket = new WebSocket(messageTabWebSocketUrl());
+  messageTabSocket.onmessage = async event => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'message') {
+        await addOrReplaceMessageTabMessage(payload.message, { markRead: true });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  messageTabSocket.onclose = () => {
+    messageTabSocket = null;
+    if (
+      authState.authenticated &&
+      isPanelOpen('messagesCol') &&
+      String(messageTabState.activeConversation?.id || '') === conversationId
+    ) {
+      messageTabReconnectTimer = setTimeout(connectMessageTabSocket, 2000);
+    }
+  };
+}
+
 async function loadMessageTab(options = {}) {
   if (!authState.authenticated) {
+    closeMessageTabSocket();
     messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
+    messageNotificationSeen.clear();
+    messageNotificationInitial = true;
     renderMessageTab();
     return;
   }
@@ -2751,8 +3119,10 @@ async function loadMessageTab(options = {}) {
     await refreshMessageConversations();
     if (isPanelOpen('messagesCol') && messageTabState.activeConversation) {
       await loadMessageConversationMessages({ markRead: true, refreshConversations: true });
+      await connectMessageTabSocket();
       return;
     }
+    closeMessageTabSocket();
     renderMessageTab();
   } catch (e) {
     if (!options.silent) showToast(e.message || 'Could not load messages');
@@ -2774,6 +3144,7 @@ function startMessageTabPolling() {
 function stopMessageTabPolling() {
   if (messageTabPoll) clearInterval(messageTabPoll);
   messageTabPoll = null;
+  closeMessageTabSocket();
 }
 
 function toggleMessagesTab() {
@@ -2788,6 +3159,7 @@ async function openMessageConversation(conversationId) {
   renderMessageTab();
   try {
     await loadMessageConversationMessages({ markRead: true, refreshConversations: true });
+    await connectMessageTabSocket();
     document.getElementById('messageTabInput')?.focus();
   } catch (e) {
     showToast(e.message || 'Could not open conversation');
@@ -2816,7 +3188,7 @@ async function sendMessageTabMessage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not send message');
-    messageTabState.messages.push(data.message);
+    await addOrReplaceMessageTabMessage(data.message, { markRead: false });
     await authFetch(`${API_CONVERSATIONS}/${encodeURIComponent(conversation.id)}/read`, { method: 'POST' }, false);
     await refreshMessageConversations();
     renderMessageTab();
@@ -2894,7 +3266,20 @@ function notifyUser(title, message, tag = '') {
     window.cryptoAgentNotify({ title, message, tag });
     return;
   }
-  showToast([title, message].filter(Boolean).join(': '));
+  const cleanTitle = title || 'Crypto Agent';
+  const cleanMessage = message || '';
+  showToast([cleanTitle, cleanMessage].filter(Boolean).join(': '));
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(cleanTitle, {
+        body: cleanMessage,
+        tag: tag || cleanTitle,
+        icon: '/favicon.ico',
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
 }
 
 async function requestBrowserNotifications() {
@@ -2932,7 +3317,7 @@ async function loadNotifications(check = false) {
   if (!authState.authenticated) {
     notificationState = { events: [], settings: [], unreadCount: 0 };
     renderNotifications();
-    return;
+    return null;
   }
 
   try {
@@ -2942,8 +3327,10 @@ async function loadNotifications(check = false) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load notifications');
     applyNotificationPayload(data, { notifyCreated: check });
+    return data;
   } catch (e) {
     console.error(e);
+    return null;
   }
 }
 
@@ -2951,7 +3338,7 @@ function startNotificationPolling() {
   if (notificationPoll) clearInterval(notificationPoll);
   if (!authState.authenticated) return;
   loadNotifications(true);
-  notificationPoll = setInterval(() => loadNotifications(true), 120000);
+  notificationPoll = setInterval(() => loadNotifications(true), NOTIFICATION_POLL_MS);
 }
 
 function stopNotificationPolling() {
@@ -2993,34 +3380,42 @@ async function updateNotificationSetting(id, enabled) {
   }
 }
 
-// ── CoinGecko — fetch prices + 24h % change ──
+// Market prices come from the backend provider fallback chain.
+function applyMarketPriceRows(rows) {
+  (rows || []).forEach(row => {
+    const symbol = String(row.symbol || row.coin || '').toUpperCase();
+    if (!symbol) return;
+    if (!P[symbol]) P[symbol] = { p: null, c: null, d: 0 };
+
+    const rawPrice = row.price ?? row.usd ?? row.USD;
+    const price = Number(rawPrice);
+    if (Number.isFinite(price) && price > 0) P[symbol].p = price;
+
+    const rawChange = row.changePercent ?? row.usd_24h_change ?? row.change ?? row.c;
+    const change = Number(rawChange);
+    if (Number.isFinite(change)) {
+      P[symbol].c = +change.toFixed(2);
+      P[symbol].d = change >= 0 ? 1 : -1;
+    }
+  });
+  renderSB();
+}
+
 async function fetchPrices() {
   try {
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price' +
-      '?ids=bitcoin,ethereum,solana,binancecoin,ripple,cardano,avalanche-2,dogecoin,chainlink,polkadot,litecoin' +
-      '&vs_currencies=usd&include_24hr_change=true'
-    );
-    if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-    const data = await res.json();
-
-    Object.entries(COINGECKO_MAP).forEach(([id, sym]) => {
-      const coin = data[id];
-      if (!coin) return;
-      if (!P[sym]) P[sym] = { p: 0, c: 0, d: 0 };
-      P[sym].p = coin.usd;
-      P[sym].c = +(coin.usd_24h_change || 0).toFixed(2);
-      P[sym].d = P[sym].c >= 0 ? 1 : -1;
-    });
-
-    renderSB();
+    const res = await fetch(API_PRICE_DATA, { credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Market prices ${res.status}`);
+    applyMarketPriceRows(data.prices || []);
   } catch (e) {
-    console.error('CoinGecko fetch failed:', e);
+    renderSB();
+    console.error('Market price fetch failed:', e);
   }
 }
 
 // ── Sidebar ──────────────────────────────────
 function fmtP(p) {
+  if (!Number.isFinite(Number(p)) || Number(p) <= 0) return '...';
   if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (p >= 1)    return '$' + p.toFixed(2);
   return '$' + p.toFixed(4);
@@ -3030,9 +3425,10 @@ function fmtP(p) {
 function renderSB() {
   const root = document.getElementById('sb');
   if (!root) return;
+  const entries = DEFAULT_MARKET_SYMBOLS.map(symbol => [symbol, P[symbol] || { p: null, c: null, d: 0 }]);
   root.innerHTML = `
     <div class="market-title">MARKETS</div>
-    ${Object.entries(P).map(([s, d]) => `
+    ${entries.map(([s, d]) => `
       <div class="tkr ${s === activeMarketSymbol ? 'active' : ''}" onclick="selectMarket('${s}')">
         <div>
           <div class="tkr-sym">${s}</div>
@@ -3040,7 +3436,7 @@ function renderSB() {
         </div>
         <div>
           <div class="tkr-price">${fmtP(d.p)}</div>
-          <div class="tkr-chg ${d.d > 0 ? 'up' : 'dn'}">${d.d > 0 ? '+' : ''}${Number(d.c || 0).toFixed(2)}%</div>
+          <div class="tkr-chg ${d.d > 0 ? 'up' : 'dn'}">${Number.isFinite(Number(d.c)) ? `${d.d > 0 ? '+' : ''}${Number(d.c).toFixed(2)}%` : '--'}</div>
         </div>
       </div>`).join('')}
   `;
@@ -3050,6 +3446,374 @@ function selectMarket(symbol) {
   activeMarketSymbol = symbol;
   renderSB();
   qs(`What's the ${symbol} plan?`);
+}
+
+function fmtUsd(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  return '$' + number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtSignedUsd(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  const sign = number > 0 ? '+' : number < 0 ? '-' : '';
+  return sign + '$' + Math.abs(number).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtQty(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  return number.toLocaleString('en-US', { maximumFractionDigits: 8 });
+}
+
+function fmtPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  return `${number > 0 ? '+' : ''}${number.toFixed(2)}%`;
+}
+
+function portfolioPlClass(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number === 0) return '';
+  return number > 0 ? 'portfolio-positive' : 'portfolio-negative';
+}
+
+function applyPortfolioPayload(data) {
+  portfolioState.holdings = Array.isArray(data.holdings) ? data.holdings : [];
+  portfolioState.snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
+  portfolioState.summary = data.summary || null;
+  portfolioState.error = data.error || '';
+  renderPortfolio();
+}
+
+function renderPortfolioSummary() {
+  const root = document.getElementById('portfolioSummary');
+  if (!root) return;
+  if (!authState.authenticated) {
+    root.innerHTML = '';
+    return;
+  }
+  const summary = portfolioState.summary || {};
+  const totalValue = summary.totalValueUsd ?? 0;
+  const totalCost = summary.totalCostUsd ?? 0;
+  const totalPl = summary.totalPlUsd ?? 0;
+  const totalPlPercent = summary.totalPlPercent ?? 0;
+  root.innerHTML = `
+    <div class="portfolio-metric">
+      <div class="portfolio-metric-label">Value</div>
+      <div class="portfolio-metric-value">${fmtUsd(totalValue)}</div>
+    </div>
+    <div class="portfolio-metric">
+      <div class="portfolio-metric-label">Cost</div>
+      <div class="portfolio-metric-value">${fmtUsd(totalCost)}</div>
+    </div>
+    <div class="portfolio-metric">
+      <div class="portfolio-metric-label">P/L</div>
+      <div class="portfolio-metric-value ${portfolioPlClass(totalPl)}">${fmtSignedUsd(totalPl)}</div>
+    </div>
+    <div class="portfolio-metric">
+      <div class="portfolio-metric-label">P/L %</div>
+      <div class="portfolio-metric-value ${portfolioPlClass(totalPlPercent)}">${fmtPercent(totalPlPercent)}</div>
+    </div>
+  `;
+}
+
+function renderPortfolioChart() {
+  const root = document.getElementById('portfolioChart');
+  if (!root) return;
+  if (!authState.authenticated) {
+    root.innerHTML = '<div class="portfolio-empty">Login to view your portfolio chart.</div>';
+    return;
+  }
+  const points = portfolioState.snapshots
+    .map(snapshot => ({ value: Number(snapshot.totalValueUsd), createdAt: Number(snapshot.createdAt) }))
+    .filter(point => Number.isFinite(point.value));
+  if (!points.length) {
+    root.innerHTML = '<div class="portfolio-empty">No chart snapshots yet. Save or refresh holdings to create the first point.</div>';
+    return;
+  }
+
+  const width = 640;
+  const height = 220;
+  const padX = 28;
+  const padY = 24;
+  const values = points.map(point => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || Math.max(max, 1);
+  const coords = points.map((point, index) => {
+    const x = points.length === 1
+      ? width / 2
+      : padX + (index / (points.length - 1)) * (width - padX * 2);
+    const y = height - padY - ((point.value - min) / span) * (height - padY * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const latest = points[points.length - 1];
+  const latestDate = latest.createdAt
+    ? new Date(latest.createdAt * 1000).toLocaleString()
+    : 'Latest snapshot';
+  const linePoints = coords.join(' ');
+  const areaPoints = `${padX},${height - padY} ${linePoints} ${width - padX},${height - padY}`;
+  root.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value chart">
+      <defs>
+        <linearGradient id="portfolioLineGlow" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#7d68ff" stop-opacity=".35"></stop>
+          <stop offset="100%" stop-color="#7d68ff" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="#242938" stroke-width="1"></line>
+      <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${height - padY}" stroke="#242938" stroke-width="1"></line>
+      <polygon points="${areaPoints}" fill="url(#portfolioLineGlow)"></polygon>
+      <polyline points="${linePoints}" fill="none" stroke="#9b8cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      ${coords.map(point => {
+        const [x, y] = point.split(',');
+        return `<circle cx="${x}" cy="${y}" r="4" fill="#ef9f27"></circle>`;
+      }).join('')}
+      <text x="${padX}" y="18" fill="#6b7488" font-size="11">${escape(latestDate)}</text>
+      <text x="${width - padX}" y="18" fill="#f4f6ff" font-size="15" font-weight="700" text-anchor="end">${fmtUsd(latest.value)}</text>
+      <text x="${padX}" y="${height - 6}" fill="#6b7488" font-size="10">${fmtUsd(min)}</text>
+      <text x="${width - padX}" y="${height - 6}" fill="#6b7488" font-size="10" text-anchor="end">${fmtUsd(max)}</text>
+    </svg>
+  `;
+}
+
+function renderPortfolioHoldings() {
+  const root = document.getElementById('portfolioHoldings');
+  if (!root) return;
+  const refreshBtn = document.getElementById('portfolioRefreshBtn');
+  if (refreshBtn) refreshBtn.disabled = !authState.authenticated || !portfolioState.holdings.length;
+
+  if (!authState.authenticated) {
+    root.innerHTML = '<div class="portfolio-empty">Login and save holdings to see your portfolio.</div>';
+    return;
+  }
+  if (!portfolioState.holdings.length) {
+    root.innerHTML = '<div class="portfolio-empty">No holdings yet. Add a prompt on the left, review the rows, then save.</div>';
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="portfolio-table-wrap">
+      <table class="portfolio-table">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Qty</th>
+            <th>Avg cost</th>
+            <th>Price</th>
+            <th>Value</th>
+            <th>P/L</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${portfolioState.holdings.map(holding => {
+            const plValue = holding.plUsd;
+            const value = holding.currentValueUsd ?? holding.costBasisUsd;
+            return `
+              <tr>
+                <td class="portfolio-symbol">${escape(holding.symbol)}</td>
+                <td>${fmtQty(holding.quantity)}</td>
+                <td>${fmtUsd(holding.averageCostUsd)}</td>
+                <td>${holding.currentPriceUsd == null ? '--' : fmtUsd(holding.currentPriceUsd)}</td>
+                <td>${fmtUsd(value)}</td>
+                <td class="${portfolioPlClass(plValue)}">${plValue == null ? '--' : `${fmtSignedUsd(plValue)} / ${fmtPercent(holding.plPercent)}`}</td>
+                <td><button class="portfolio-button danger" type="button" onclick="deletePortfolioHolding('${escapeJS(holding.symbol)}')">DELETE</button></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderPortfolioDraft() {
+  const root = document.getElementById('portfolioDraftTable');
+  const errorRoot = document.getElementById('portfolioDraftErrors');
+  const saveBtn = document.getElementById('portfolioSaveBtn');
+  if (!root) return;
+
+  if (errorRoot) {
+    errorRoot.innerHTML = portfolioState.errors.length
+      ? `<div class="portfolio-error" style="margin-top:10px">${portfolioState.errors.map(escape).join('<br>')}</div>`
+      : '';
+  }
+
+  if (!authState.authenticated) {
+    root.innerHTML = '<div class="portfolio-empty">Login to parse and save portfolio holdings.</div>';
+    if (saveBtn) saveBtn.disabled = true;
+    return;
+  }
+
+  if (!portfolioState.draft.length) {
+    root.innerHTML = '<div class="portfolio-empty">Parsed holdings will appear here for review before saving.</div>';
+    if (saveBtn) saveBtn.disabled = true;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="portfolio-table-wrap">
+      <table class="portfolio-table">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Qty</th>
+            <th>Avg cost USD</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${portfolioState.draft.map((row, index) => `
+            <tr>
+              <td><input data-portfolio-draft-symbol="${index}" value="${escapeAttr(row.symbol || '')}" /></td>
+              <td><input data-portfolio-draft-quantity="${index}" type="number" min="0" step="any" value="${row.quantity ?? ''}" /></td>
+              <td><input data-portfolio-draft-cost="${index}" type="number" min="0" step="any" value="${row.averageCostUsd ?? ''}" /></td>
+              <td class="${row.valid ? 'portfolio-positive' : 'portfolio-error'}">${row.valid ? 'Ready' : escape(row.error || 'Review needed')}</td>
+              <td><button class="portfolio-button danger" type="button" onclick="removePortfolioDraftRow(${index})">REMOVE</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  if (saveBtn) saveBtn.disabled = false;
+}
+
+function renderPortfolio() {
+  renderPortfolioSummary();
+  renderPortfolioChart();
+  renderPortfolioHoldings();
+  renderPortfolioDraft();
+}
+
+async function loadPortfolio() {
+  if (!authState.authenticated) {
+    portfolioState = { holdings: [], snapshots: [], summary: null, draft: [], errors: [], error: '' };
+    renderPortfolio();
+    return;
+  }
+
+  try {
+    const res = await authFetch(API_PORTFOLIO);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not load portfolio');
+    applyPortfolioPayload(data);
+  } catch (e) {
+    portfolioState.error = e.message || 'Could not load portfolio';
+    renderPortfolio();
+    showToast(portfolioState.error);
+  }
+}
+
+async function parsePortfolioPrompt() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+  const prompt = document.getElementById('portfolioPrompt')?.value.trim() || '';
+  if (!prompt) {
+    showToast('Portfolio prompt required');
+    return;
+  }
+
+  try {
+    const res = await authFetch(`${API_PORTFOLIO}/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: prompt }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not parse portfolio prompt');
+    portfolioState.draft = Array.isArray(data.draft) ? data.draft : [];
+    portfolioState.errors = Array.isArray(data.errors) ? data.errors : [];
+    renderPortfolioDraft();
+  } catch (e) {
+    showToast(e.message || 'Could not parse portfolio prompt');
+  }
+}
+
+function portfolioDraftRowsFromInputs() {
+  return portfolioState.draft.map((_, index) => ({
+    symbol: (document.querySelector(`[data-portfolio-draft-symbol="${index}"]`)?.value || '').trim().toUpperCase(),
+    quantity: Number(document.querySelector(`[data-portfolio-draft-quantity="${index}"]`)?.value),
+    averageCostUsd: Number(document.querySelector(`[data-portfolio-draft-cost="${index}"]`)?.value),
+  })).filter(row =>
+    DEFAULT_MARKET_SYMBOLS.includes(row.symbol) &&
+    Number.isFinite(row.quantity) &&
+    row.quantity > 0 &&
+    Number.isFinite(row.averageCostUsd) &&
+    row.averageCostUsd > 0
+  );
+}
+
+async function savePortfolioDraft() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+  const holdings = portfolioDraftRowsFromInputs();
+  if (!holdings.length) {
+    showToast('No valid portfolio rows to save');
+    return;
+  }
+
+  try {
+    const res = await authFetch(`${API_PORTFOLIO}/holdings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ holdings }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save portfolio');
+    portfolioState.draft = [];
+    portfolioState.errors = [];
+    document.getElementById('portfolioPrompt').value = '';
+    applyPortfolioPayload(data);
+    showToast('Portfolio saved');
+  } catch (e) {
+    showToast(e.message || 'Could not save portfolio');
+  }
+}
+
+function removePortfolioDraftRow(index) {
+  portfolioState.draft.splice(index, 1);
+  renderPortfolioDraft();
+}
+
+async function refreshPortfolio() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+  try {
+    const res = await authFetch(`${API_PORTFOLIO}/refresh`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (data.holdings) applyPortfolioPayload(data);
+    if (!res.ok) throw new Error(data.error || 'Could not refresh portfolio prices');
+    showToast('Portfolio refreshed');
+  } catch (e) {
+    showToast(e.message || 'Could not refresh portfolio prices');
+  }
+}
+
+async function deletePortfolioHolding(symbol) {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+  try {
+    const res = await authFetch(`${API_PORTFOLIO}/holdings/${encodeURIComponent(symbol)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not delete holding');
+    applyPortfolioPayload(data);
+    showToast(`${symbol} removed`);
+  } catch (e) {
+    showToast(e.message || 'Could not delete holding');
+  }
 }
 
 function legacySeedNotes() {
@@ -3288,7 +4052,14 @@ function toggleNotebook() {
 }
 
 async function checkNotificationsNow() {
-  await loadNotifications(true);
+  const data = await loadNotifications(true);
+  if (!data) {
+    showToast('Could not check price alerts');
+    return;
+  }
+  if (!(data.created || []).length) {
+    showToast('No price alert triggered. Move is below threshold or still in cooldown.');
+  }
 }
 
 function userInitial(user) {
@@ -3547,6 +4318,7 @@ function renderAuthState() {
 
   renderProfilePanel();
   syncChatControls();
+  renderPortfolio();
 }
 
 function toggleAccountMenu(forceOpen = null) {
@@ -3598,7 +4370,10 @@ async function handleAuthClick() {
     friendState = { friends: [], sent: [], received: [], searchResults: [] };
     directChatState = { conversation: null, messages: [] };
     messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
+    messageNotificationSeen.clear();
+    messageNotificationInitial = true;
     recommendationState = [];
+    portfolioState = { holdings: [], snapshots: [], summary: null, draft: [], errors: [], error: '' };
     directChatMinimized = false;
     localStorage.removeItem('cryptoAgentDirectConversation');
     resetAgentChat();
@@ -3610,6 +4385,7 @@ async function handleAuthClick() {
     renderFriends();
     renderMessageTab();
     renderRecommendations();
+    renderPortfolio();
     showToast('Logged out');
   }
 }
@@ -3625,6 +4401,10 @@ async function registerPrompt() {
 // ── Chat Helpers ─────────────────────────────
 function escape(t) {
   return String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(t) {
+  return escape(t).replace(/"/g, '&quot;');
 }
 
 function escapeJS(str) {
@@ -3645,15 +4425,96 @@ function fmt(t) {
     .replace(/\n/g, '<br>');
 }
 
-function initialAgentMessageHtml() {
+function fallbackAgentGreeting() {
+  if (!authState.authenticated) {
+    return 'Sign in and I’ll tailor the market workspace to your notes, watchlist, and chat history.';
+  }
+
+  const user = authState.user || {};
+  const aiProfile = user.aiProfile || {};
+  const displayName = user.displayName || user.name || user.username || '';
+  const firstName = displayName.trim().split(' ', 1)[0];
+  const namePrefix = firstName ? `${firstName}, ` : '';
+  const style = aiProfile.communicationStyle || 'direct';
+  const action = aiProfile.riskProfile === 'conservative'
+    ? 'downside risk and invalidation'
+    : aiProfile.riskProfile === 'aggressive'
+      ? 'momentum and invalidation'
+      : 'plan, risk, and key levels';
+
+  if (aiProfile.favoriteAssets) {
+    if (style === 'executive') return `${namePrefix}watchlist loaded: ${aiProfile.favoriteAssets}. I can brief you on ${action}.`;
+    if (style === 'technical') return `${namePrefix}${aiProfile.favoriteAssets} is on deck. Want structure, levels, and invalidation first?`;
+    if (style === 'casual') return `${namePrefix}${aiProfile.favoriteAssets} is your board. Want the no-noise read?`;
+    if (style === 'teacher') return `${namePrefix}we can use ${aiProfile.favoriteAssets} to walk through ${action}.`;
+    return `${namePrefix}${aiProfile.favoriteAssets} is in focus. I can give you ${action}.`;
+  }
+  if (aiProfile.goals) {
+    if (style === 'executive') return `${namePrefix}goal loaded: "${aiProfile.goals}". I will keep answers decision-oriented.`;
+    if (style === 'technical') return `${namePrefix}I will frame setups around "${aiProfile.goals}". Send a ticker for structure.`;
+    if (style === 'casual') return `${namePrefix}I have your goal: "${aiProfile.goals}". Drop a ticker and I will keep it practical.`;
+    return `${namePrefix}goal loaded: "${aiProfile.goals}". Send a ticker and I will frame the plan around it.`;
+  }
+  if (style === 'executive') return `${namePrefix}ready for a decision brief: what changed, what matters, and what to do next.`;
+  if (style === 'technical') return `${namePrefix}send a ticker and I will map structure, invalidation, and scenarios.`;
+  if (style === 'casual') return `${namePrefix}send me a coin and I will give you the clean read without the noise.`;
+  if (style === 'teacher') return `${namePrefix}give me a ticker and I will break down the setup step by step.`;
+  return `${namePrefix}send a ticker and I will give you ${action}.`;
+  if (aiProfile.favoriteAssets) {
+    return `${namePrefix}I have your watchlist in focus: ${aiProfile.favoriteAssets}. Want a quick market check or risk-first plan?`;
+  }
+  if (aiProfile.goals) {
+    return `${namePrefix}I’m tuned to your goal: ${aiProfile.goals}. Give me a ticker and I’ll frame the answer around that.`;
+  }
+  return `${namePrefix}I’m ready to personalize the market work from your notes, watchlist, and chat history. Send a ticker or ask for today’s brief.`;
+}
+
+function updateAgentHeader() {
+  const subtitle = document.getElementById('agentSubtitle');
+  if (!subtitle) return;
+  if (!authState.authenticated) {
+    subtitle.textContent = 'Sign in for a personalized market brief';
+    return;
+  }
+  const user = authState.user || {};
+  const aiProfile = user.aiProfile || {};
+  subtitle.textContent = aiProfile.favoriteAssets
+    ? `Watching ${aiProfile.favoriteAssets}`
+    : 'Personalized from your profile, notes, and chat history';
+}
+
+function initialAgentMessageHtml(message = '') {
+  const content = message || agentGreetingText || fallbackAgentGreeting();
   return `
     <div class="msg msg-a">
       <div class="lbl">CRYPTO AGENT</div>
-      <div class="bbl bbl-a">
-        Online. Ask me about <strong>prices</strong>, market trends, or on-chain data.
-      </div>
+      <div class="bbl bbl-a">${fmt(content)}</div>
     </div>
   `;
+}
+
+function setAgentGreeting(message) {
+  agentGreetingText = message || fallbackAgentGreeting();
+  updateAgentHeader();
+  const messages = document.getElementById('msgs');
+  if (messages && !hist.length && !busy) {
+    messages.innerHTML = initialAgentMessageHtml(agentGreetingText);
+  }
+}
+
+async function loadAgentGreeting() {
+  if (!authState.authenticated) {
+    setAgentGreeting(fallbackAgentGreeting());
+    return;
+  }
+  try {
+    const res = await authFetch(API_AGENT_GREETING);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not load agent greeting');
+    setAgentGreeting(data.message || fallbackAgentGreeting());
+  } catch (e) {
+    setAgentGreeting(fallbackAgentGreeting());
+  }
 }
 
 function resetAgentChat() {
@@ -3664,6 +4525,7 @@ function resetAgentChat() {
   if (input) input.value = '';
   const messages = document.getElementById('msgs');
   if (messages) messages.innerHTML = initialAgentMessageHtml();
+  updateAgentHeader();
   renderRecommendations();
   syncChatControls();
 }
@@ -3848,9 +4710,12 @@ async function init() {
   applyTheme(localStorage.getItem('cryptoAgentTheme') || 'dark');
   syncRootWidth();
   renderChatMode();
+  renderSB();
   renderRecommendations();
   renderMessageTab();
+  renderPortfolio();
   await loadAuthState();
+  await loadAgentGreeting();
   applyInitialPage();
   await fetchPrices();
   setInterval(fetchPrices, 30000);
