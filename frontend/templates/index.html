@@ -1080,9 +1080,65 @@
     .msgs::-webkit-scrollbar-track { background: #0b0d11; }
     .msgs::-webkit-scrollbar-thumb { background: #1a1e28; border-radius: 2px; }
 
-    .msg { max-width: 90%; display: flex; flex-direction: column; position: relative; }
-    .msg-u { align-self: flex-end; }
-    .msg-a { align-self: flex-start; width: 85%; }
+    .msg {
+      max-width: 92%;
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 10px;
+      align-items: flex-start;
+      position: relative;
+    }
+    .msg-u {
+      align-self: flex-end;
+      grid-template-columns: minmax(0, 1fr) 36px;
+    }
+    .msg-a { align-self: flex-start; width: 88%; }
+    .msg-u .msg-avatar {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .msg-u .msg-body {
+      grid-column: 1;
+      grid-row: 1;
+      align-items: flex-end;
+    }
+    .msg-body {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .msg-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      overflow: hidden;
+      border: 1px solid #292d3a;
+      background: #10131b;
+      color: #a99cff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .msg-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .msg-avatar-agent {
+      color: #05060a;
+      border-color: #f4c84f;
+      background: linear-gradient(135deg, #f4c84f, #7fd6a8);
+    }
+    .msg-avatar-user {
+      color: #fff;
+      border-color: #4f43a0;
+      background: #8f3bb6;
+    }
 
     .lbl { display: none; }
     .lbl-r { text-align: right; }
@@ -1096,6 +1152,29 @@
     }
     .bbl-u { background: #211b51; color: #a99cff; border: 1px solid #4f43a0; font-weight: 700; }
     .bbl-a { background: #15151d; color: #777b86; border: 1px solid #20222c; position: relative; }
+    .bbl h1,
+    .bbl h2,
+    .bbl h3 {
+      color: #f4f6ff;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.25;
+      margin: 3px 0 8px;
+      letter-spacing: 0;
+    }
+    .bbl h1 { font-size: 20px; }
+    .bbl h2 { font-size: 18px; }
+    .bbl h3 { font-size: 16px; }
+    .bbl ul,
+    .bbl ol {
+      margin: 7px 0 7px 20px;
+      padding: 0;
+    }
+    .bbl li {
+      margin: 4px 0;
+      padding-left: 2px;
+    }
+    .bbl strong { color: #e9ebf5; }
+    .bbl em { color: #aeb4c4; }
 
     /* Actions under messages */
     .msg-actions {
@@ -1122,20 +1201,29 @@
     /* Text formatting inside chat bubbles */
     pre {
       background: #05060a;
-      padding: 10px;
-      border-radius: 4px;
+      padding: 12px;
+      border-radius: 8px;
       border: 1px solid #1a1e28;
-      margin: 8px 0;
+      margin: 10px 0;
       overflow-x: auto;
-      font-size: 11px;
+      font-size: 13px;
       color: #ef9f27;
+      line-height: 1.55;
     }
     code {
       background: #1e2330;
-      padding: 1px 4px;
-      border-radius: 3px;
+      padding: 2px 5px;
+      border-radius: 4px;
       color: #EF9F27;
-      font-size: 11px;
+      font-size: .9em;
+    }
+    pre code {
+      display: block;
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+      white-space: pre;
     }
 
     /* Loading dots */
@@ -2139,6 +2227,7 @@
 //  CONFIG & LOCAL NOTEBOOK STATE
 // ─────────────────────────────────────────────
 const API_CHAT = '/api/chat';
+const API_CHAT_STREAM = '/api/chat/stream';
 const API_AUTH_ME = '/api/auth/me';
 const API_AUTH_LOGIN = '/api/auth/login';
 const API_AUTH_REGISTER = '/api/auth/register';
@@ -4406,13 +4495,67 @@ function escapeJS(str) {
     .replace(/\r/g, '\\r');
 }
 
+function fmtInline(line) {
+  return line
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+}
+
 function fmt(t) {
-  return escape(t)
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
+  const codeBlocks = [];
+  const escaped = escape(t).replace(/```([A-Za-z0-9_-]+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const safeLang = lang ? ` class="language-${escapeAttr(lang)}"` : '';
+    const index = codeBlocks.push(`<pre><code${safeLang}>${code.replace(/^\n|\n$/g, '')}</code></pre>`) - 1;
+    return `\n@@CODE_BLOCK_${index}@@\n`;
+  });
+
+  return escaped.split('\n').map(line => {
+    const codeMatch = line.match(/^@@CODE_BLOCK_(\d+)@@$/);
+    if (codeMatch) return codeBlocks[Number(codeMatch[1])] || '';
+    if (!line.trim()) return '<br>';
+
+    const h3 = line.match(/^###\s+(.+)$/);
+    if (h3) return `<h3>${fmtInline(h3[1])}</h3>`;
+    const h2 = line.match(/^##\s+(.+)$/);
+    if (h2) return `<h2>${fmtInline(h2[1])}</h2>`;
+    const h1 = line.match(/^#\s+(.+)$/);
+    if (h1) return `<h1>${fmtInline(h1[1])}</h1>`;
+
+    const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+    if (bullet) return `<ul><li>${fmtInline(bullet[1])}</li></ul>`;
+    const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+    if (ordered) return `<ol><li>${fmtInline(ordered[1])}</li></ol>`;
+
+    return fmtInline(line);
+  }).join('<br>');
+}
+
+function chatAvatarHtml(isUser) {
+  if (isUser) {
+    const user = authState.user || {};
+    if (isPictureSrc(user.picture || '')) {
+      return `<div class="msg-avatar msg-avatar-user"><img src="${escapeAttr(user.picture)}" alt="" /></div>`;
+    }
+    return `<div class="msg-avatar msg-avatar-user">${escape(userInitial(user))}</div>`;
+  }
+  return '<div class="msg-avatar msg-avatar-agent">AI</div>';
+}
+
+function assistantActionHtml(rawText) {
+  if (!rawText) return '';
+  return `
+    <div class="msg-actions">
+      <button class="act-btn" onclick="saveNoteFromAI('${escapeJS(rawText)}')">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+        Save to Notebook
+      </button>
+    </div>
+  `;
 }
 
 function fallbackAgentGreeting() {
@@ -4477,8 +4620,11 @@ function initialAgentMessageHtml(message = '') {
   const content = message || agentGreetingText || fallbackAgentGreeting();
   return `
     <div class="msg msg-a">
-      <div class="lbl">CRYPTO AGENT</div>
-      <div class="bbl bbl-a">${fmt(content)}</div>
+      ${chatAvatarHtml(false)}
+      <div class="msg-body">
+        <div class="lbl">CRYPTO AGENT</div>
+        <div class="bbl bbl-a">${fmt(content)}</div>
+      </div>
     </div>
   `;
 }
@@ -4562,31 +4708,99 @@ function addMsg(role, rawText, isHtml = false) {
   const isUser = role === 'user';
   const el = document.createElement('div');
   el.className = 'msg ' + (isUser ? 'msg-u' : 'msg-a');
-  
   const contentHtml = isHtml ? rawText : fmt(rawText);
-  
-  const actionHtml = (!isUser && rawText !== '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>') ? `
-    <div class="msg-actions">
-      <button class="act-btn" onclick="saveNoteFromAI('${escapeJS(rawText)}')">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-          <polyline points="17 21 17 13 7 13 7 21"></polyline>
-          <polyline points="7 3 7 8 15 8"></polyline>
-        </svg>
-        Save to Notebook
-      </button>
-    </div>
-  ` : '';
+  const actionHtml = (!isUser && !isHtml) ? assistantActionHtml(rawText) : '';
 
   el.innerHTML = `
-    <div class="lbl ${isUser ? 'lbl-r' : ''}">${isUser ? 'YOU' : 'CRYPTO AGENT'}</div>
-    <div class="bbl ${isUser ? 'bbl-u' : 'bbl-a'}">${contentHtml}</div>
-    ${actionHtml}`;
-    
+    ${chatAvatarHtml(isUser)}
+    <div class="msg-body">
+      <div class="lbl ${isUser ? 'lbl-r' : ''}">${isUser ? 'YOU' : 'CRYPTO AGENT'}</div>
+      <div class="bbl ${isUser ? 'bbl-u' : 'bbl-a'}">${contentHtml}</div>
+      ${actionHtml}
+    </div>`;
+
   const c = document.getElementById('msgs');
   c.appendChild(el);
   c.scrollTop = c.scrollHeight;
   return el;
+}
+
+async function fetchAgentReplyFallback(txt) {
+  const res = await authFetch(API_CHAT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: txt, mode: chatMode }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Chat request failed');
+  return data.reply || 'No response received.';
+}
+
+function parseSseBlock(block) {
+  const data = block
+    .split('\n')
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice(5).trimStart())
+    .join('\n');
+  if (!data) return null;
+  return JSON.parse(data);
+}
+
+async function streamAgentReply(txt, messageEl) {
+  const bubble = messageEl.querySelector('.bbl');
+  const res = await authFetch(API_CHAT_STREAM, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: txt, mode: chatMode }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Chat stream failed');
+  }
+
+  if (!res.body) {
+    const reply = await fetchAgentReplyFallback(txt);
+    bubble.innerHTML = fmt(reply);
+    return reply;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let reply = '';
+
+  async function handlePayload(payload) {
+    if (!payload) return false;
+    if (payload.type === 'token') {
+      reply += payload.content || '';
+      bubble.innerHTML = fmt(reply);
+      document.getElementById('msgs').scrollTop = 9999;
+      return false;
+    }
+    if (payload.type === 'error') {
+      throw new Error(payload.error || 'Chat stream failed');
+    }
+    return payload.type === 'done';
+  }
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() || '';
+    for (const block of blocks) {
+      if (await handlePayload(parseSseBlock(block))) {
+        return reply || 'No response received.';
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    await handlePayload(parseSseBlock(buffer));
+  }
+  return reply || 'No response received.';
 }
 
 async function send() {
@@ -4595,7 +4809,7 @@ async function send() {
     showToast('Login required');
     return;
   }
-  const el  = document.getElementById('inp');
+  const el = document.getElementById('inp');
   const txt = el.value.trim();
   if (!txt) return;
   el.value = '';
@@ -4609,44 +4823,27 @@ async function send() {
   syncChatControls();
 
   const loader = addMsg('assistant',
-    '<span class="dots"><span>▪</span><span>▪</span><span>▪</span></span>', true);
+    '<span class="dots"><span>.</span><span>.</span><span>.</span></span>', true);
 
   try {
-    const res = await authFetch(API_CHAT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: txt, mode: chatMode }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 401) {
-      authSessionVersion += 1;
-      accessToken = null;
-      authState.authenticated = false;
-      authState.user = null;
-      recommendationState = [];
-      resetAgentChat();
-      renderAuthState();
-    }
+    const reply = await streamAgentReply(txt, loader);
     if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
       loader.remove();
       return;
     }
-    if (!res.ok) throw new Error(data.error || 'Chat request failed');
-
-    const reply = data.reply || 'No response received.';
     hist.push({ role: 'assistant', content: reply });
-    
-    loader.remove();
-    addMsg('assistant', reply);
+    const body = loader.querySelector('.msg-body');
+    if (body && !body.querySelector('.msg-actions')) {
+      body.insertAdjacentHTML('beforeend', assistantActionHtml(reply));
+    }
     loadRecommendations();
-
   } catch (e) {
     if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
       loader.remove();
       return;
     }
-    loader.querySelector('.bbl').textContent = e.message || 'Connection failed. Please try again.';
+    const bubble = loader.querySelector('.bbl');
+    if (bubble) bubble.textContent = e.message || 'Connection failed. Please try again.';
     console.error(e);
   }
 

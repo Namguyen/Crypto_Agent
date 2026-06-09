@@ -181,6 +181,30 @@ def chat_mode_options() -> list[dict]:
     ]
 
 
+def private_context_for_agent(
+    retrieved_notes: list[dict] | None = None,
+    ai_profile: dict | None = None,
+    recent_activity: list[str] | None = None,
+) -> str:
+    context_parts = [
+        format_ai_profile(ai_profile),
+        format_recent_activity(recent_activity),
+        format_retrieved_notes(retrieved_notes),
+    ]
+    return "\n\n".join(part for part in context_parts if part)
+
+
+def system_message_for_config(config: ChatModeConfig, private_context: str) -> dict:
+    context_suffix = f"\n\n{private_context}" if private_context else ""
+    return {
+        "role": "system",
+        "content": (
+            f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
+            f"{config.system_guidance}{context_suffix}"
+        ),
+    }
+
+
 def summarize_forum_thread(topic: dict, posts: list[dict]) -> tuple[str, str]:
     """Generate a concise forum thread summary without tool calls."""
     config = CHAT_MODES["instant"]
@@ -246,29 +270,14 @@ def run_agent(
 ) -> str:
     """Execute the crypto assistant with mode-specific model and tool settings."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
-    context_parts = [
-        format_ai_profile(ai_profile),
-        format_recent_activity(recent_activity),
-        format_retrieved_notes(retrieved_notes),
-    ]
-    private_context = "\n\n".join(part for part in context_parts if part)
-    context_suffix = f"\n\n{private_context}" if private_context else ""
+    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity)
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
 
     while True:
         response = client.chat.completions.create(
             model=config.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
-                        f"{config.system_guidance}{context_suffix}"
-                    ),
-                }
-            ]
-            + conversation,
+            messages=[system_message_for_config(config, private_context)] + conversation,
             tools=TOOL_SCHEMA,
             tool_choice="auto",
             max_tokens=config.max_tokens,
@@ -304,3 +313,135 @@ def run_agent(
             final = msg.content or "No response."
             conversation.append({"role": "assistant", "content": final})
             return final
+
+
+def _append_stream_tool_delta(tool_calls: dict[int, dict], delta_tool_call) -> None:
+    index = int(getattr(delta_tool_call, "index", 0) or 0)
+    current = tool_calls.setdefault(
+        index,
+        {
+            "id": "",
+            "type": "function",
+            "function": {"name": "", "arguments": ""},
+        },
+    )
+    if getattr(delta_tool_call, "id", None):
+        current["id"] = delta_tool_call.id
+    if getattr(delta_tool_call, "type", None):
+        current["type"] = delta_tool_call.type
+
+    function_delta = getattr(delta_tool_call, "function", None)
+    if not function_delta:
+        return
+    if getattr(function_delta, "name", None):
+        current["function"]["name"] += function_delta.name
+    if getattr(function_delta, "arguments", None):
+        current["function"]["arguments"] += function_delta.arguments
+
+
+def _stream_final_without_tools(conversation: list, config: ChatModeConfig, private_context: str):
+    context_suffix = f"\n\n{private_context}" if private_context else ""
+    response = client.chat.completions.create(
+        model=config.model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    f"{SYSTEM_PROMPT}\n\nCurrent chat mode: {config.label}. "
+                    "Do not call tools in this response. Use the conversation and any tool results already available. "
+                    "If live data is missing, say that briefly and give a useful answer from available context."
+                    f"{context_suffix}"
+                ),
+            }
+        ]
+        + conversation,
+        max_tokens=config.max_tokens,
+        stream=True,
+    )
+    final_parts = []
+    for chunk in response:
+        if not chunk.choices:
+            continue
+        content = getattr(chunk.choices[0].delta, "content", None)
+        if content:
+            final_parts.append(content)
+            yield content
+    final = "".join(final_parts) or "No response."
+    conversation.append({"role": "assistant", "content": final})
+
+
+def run_agent_stream(
+    user_input: str,
+    conversation: list,
+    mode: str = "instant",
+    retrieved_notes: list[dict] | None = None,
+    ai_profile: dict | None = None,
+    recent_activity: list[str] | None = None,
+):
+    """Stream assistant text while preserving the existing tool-calling loop."""
+    config = CHAT_MODES[normalize_chat_mode(mode)]
+    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity)
+    conversation.append({"role": "user", "content": user_input})
+    tool_rounds = 0
+
+    while True:
+        response = client.chat.completions.create(
+            model=config.model,
+            messages=[system_message_for_config(config, private_context)] + conversation,
+            tools=TOOL_SCHEMA,
+            tool_choice="auto",
+            max_tokens=config.max_tokens,
+            stream=True,
+        )
+
+        final_parts = []
+        tool_calls: dict[int, dict] = {}
+
+        for chunk in response:
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            delta = choice.delta
+            content = getattr(delta, "content", None)
+            if content:
+                final_parts.append(content)
+                yield content
+            for tool_call in getattr(delta, "tool_calls", None) or []:
+                _append_stream_tool_delta(tool_calls, tool_call)
+
+        if tool_calls:
+            if tool_rounds >= config.max_tool_rounds:
+                yield from _stream_final_without_tools(conversation, config, private_context)
+                return
+
+            tool_rounds += 1
+            ordered_tool_calls = [tool_calls[index] for index in sorted(tool_calls)]
+            conversation.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": ordered_tool_calls,
+                }
+            )
+
+            for call in ordered_tool_calls:
+                fn_name = call["function"]["name"]
+                try:
+                    fn_args = json.loads(call["function"]["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    fn_args = {}
+
+                fn = TOOL_MAP.get(fn_name)
+                result = fn(**fn_args) if fn else f"Tool '{fn_name}' does not exist."
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call["id"],
+                        "content": str(result),
+                    }
+                )
+            continue
+
+        final = "".join(final_parts) or "No response."
+        conversation.append({"role": "assistant", "content": final})
+        return

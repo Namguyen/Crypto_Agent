@@ -363,3 +363,21 @@ def save_topic_summary(topic_id: int | str, summary: str, model: str) -> Optiona
         )
         changed = cursor.rowcount
     return get_topic(topic_id) if changed else None
+
+
+def clear_topic_summary(topic_id: int | str) -> Optional[dict]:
+    now = int(time.time())
+    with auth_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE forum_topics
+            SET summary = NULL,
+                summary_model = NULL,
+                summary_updated_at = NULL,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, str(topic_id)),
+        )
+        changed = cursor.rowcount
+    return get_topic(topic_id) if changed else None

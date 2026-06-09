@@ -6,6 +6,7 @@ from backend.ai.agent import summarize_forum_thread
 from backend.auth.dependencies import require_user
 from backend.auth.store import create_general_notification_event
 from backend.forum.store import (
+    clear_topic_summary,
     create_post,
     create_topic,
     forum_reply_notification_recipients,
@@ -118,3 +119,12 @@ def forum_topic_summary(topic_id: str, user=Depends(require_user)):
         return JSONResponse({"error": f"Could not summarize topic: {exc}"}, status_code=502)
     updated = save_topic_summary(topic_id, summary, model)
     return {"summary": summary, "model": model, "topic": updated or topic}
+
+
+@router.delete("/topics/{topic_id}/summary")
+def forum_topic_summary_clear(topic_id: str, user=Depends(require_user)):
+    topic = get_topic(topic_id)
+    if not topic:
+        return JSONResponse({"error": "Topic not found"}, status_code=404)
+    updated = clear_topic_summary(topic_id)
+    return {"ok": True, "topic": updated or {**topic, "summary": "", "summaryModel": "", "summaryUpdatedAt": None}}

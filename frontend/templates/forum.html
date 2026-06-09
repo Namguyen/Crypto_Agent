@@ -300,7 +300,10 @@
         </div>
         ${topic.summary ? `
           <div class="card summary">
-            <h2>AI Summary</h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <h2 style="margin-bottom:0;">AI Summary</h2>
+              <button type="button" onclick="clearTopicSummary('${esc(topic.id)}')">Clear summary</button>
+            </div>
             <div class="body-text">${esc(topic.summary)}</div>
             <div class="meta">${esc(topic.summaryModel || '')} - ${fmtTime(topic.summaryUpdatedAt)}</div>
           </div>` : ''}
@@ -407,6 +410,18 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         alert(data.error || 'Could not summarize topic');
+        return;
+      }
+      forumState.topic = data.topic;
+      renderThread();
+      await refreshForum();
+    }
+
+    async function clearTopicSummary(topicId) {
+      const res = await authFetch(`${API_FORUM_TOPICS}/${encodeURIComponent(topicId)}/summary`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Could not clear summary');
         return;
       }
       forumState.topic = data.topic;

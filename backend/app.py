@@ -10,7 +10,7 @@ from typing import Optional
 import dotenv
 import requests
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -19,7 +19,7 @@ try:
 except Exception:  # pragma: no cover - helpful error when dependency missing
     jwt = None
 
-from backend.ai.agent import CHAT_MODES, chat_mode_options, normalize_chat_mode, run_agent
+from backend.ai.agent import CHAT_MODES, chat_mode_options, normalize_chat_mode, run_agent, run_agent_stream
 from backend.ai.retrieval import index_note_for_user, retrieve_user_notes
 from backend.auth.store import (
     cleanup_expired_refresh_tokens,
@@ -1574,3 +1574,70 @@ async def chat(request: Request, user=Depends(require_user)):
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         log_user_request(user["id"], user_input, None, "error", str(exc), duration_ms, mode, mode_config.model)
         return json_error(str(exc), 500)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: Request, user=Depends(require_user)):
+    if isinstance(user, JSONResponse):
+        return user
+    data = await request.json()
+    user_input = data.get("message", "").strip()
+    raw_mode = (data.get("mode") or "instant").strip().lower()
+
+    if raw_mode not in CHAT_MODES:
+        return json_error("Invalid chat mode", 400)
+    if not user_input:
+        return json_error("Empty message", 400)
+
+    mode = normalize_chat_mode(raw_mode)
+    mode_config = CHAT_MODES[mode]
+    started_at = time.perf_counter()
+
+    try:
+        try:
+            retrieved_notes = retrieve_user_notes(user["id"], user_input, limit=4)
+        except Exception:
+            retrieved_notes = []
+        recent_activity = list_recent_user_request_messages(user["id"], limit=5)
+        ai_profile = {
+            **(user.get("aiProfile") or {}),
+            "displayName": user.get("displayName", ""),
+            "bio": user.get("bio", ""),
+        }
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        log_user_request(user["id"], user_input, None, "error", str(exc), duration_ms, mode, mode_config.model)
+        return json_error(str(exc), 500)
+
+    def sse(payload: dict) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    def event_stream():
+        reply_parts = []
+        try:
+            for token in run_agent_stream(
+                user_input,
+                get_conversation_history(user),
+                mode=mode,
+                retrieved_notes=retrieved_notes,
+                ai_profile=ai_profile,
+                recent_activity=recent_activity,
+            ):
+                reply_parts.append(token)
+                yield sse({"type": "token", "content": token})
+
+            reply = "".join(reply_parts) or "No response."
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
+            yield sse({"type": "done", "mode": mode, "model": mode_config.model})
+        except Exception as exc:
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            partial = "".join(reply_parts) or None
+            log_user_request(user["id"], user_input, partial, "error", str(exc), duration_ms, mode, mode_config.model)
+            yield sse({"type": "error", "error": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

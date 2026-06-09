@@ -741,6 +741,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(page.status_code, 200)
             self.assertIn("Discussion Forum", page.text)
             self.assertIn("AI summarize", page.text)
+            self.assertIn("clearTopicSummary", page.text)
 
             login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
             token = login.json()["accessToken"]
@@ -825,6 +826,17 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(summary.json()["topic"]["summary"], "BTC thread summary")
             summarize.assert_called_once()
 
+            cleared_summary = client.delete(f"/api/forum/topics/{topic['id']}/summary", headers=headers)
+            self.assertEqual(cleared_summary.status_code, 200)
+            self.assertTrue(cleared_summary.json()["ok"])
+            self.assertEqual(cleared_summary.json()["topic"]["summary"], "")
+            self.assertEqual(cleared_summary.json()["topic"]["summaryModel"], "")
+            self.assertIsNone(cleared_summary.json()["topic"]["summaryUpdatedAt"])
+
+            detail_after_clear = client.get(f"/api/forum/topics/{topic['id']}", headers=headers)
+            self.assertEqual(detail_after_clear.status_code, 200)
+            self.assertEqual(detail_after_clear.json()["topic"]["summary"], "")
+
     def test_chat_modes_and_request_logging(self):
         with TestClient(self.app) as client, patch("backend.app.run_agent", return_value="reasoned reply") as run_agent:
             login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
@@ -857,6 +869,24 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(logs.status_code, 200)
             self.assertEqual(logs.json()["logs"][0]["mode"], "reasoning")
             self.assertTrue(logs.json()["logs"][0]["model"])
+
+    def test_chat_stream_returns_sse_tokens(self):
+        with TestClient(self.app) as client, patch("backend.app.run_agent_stream", return_value=iter(["streamed ", "reply"])):
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+
+            res = client.post(
+                "/api/chat/stream",
+                json={"message": "Compare BTC and ETH", "mode": "instant"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.headers["content-type"].split(";")[0], "text/event-stream")
+            self.assertIn('"type": "token"', res.text)
+            self.assertIn('"content": "streamed "', res.text)
+            self.assertIn('"content": "reply"', res.text)
+            self.assertIn('"type": "done"', res.text)
 
     def test_in_app_price_notifications(self):
         market_payload = {
