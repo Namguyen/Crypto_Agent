@@ -871,10 +871,49 @@
       margin-top: 10px;
     }
     .portfolio-summary {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(110px, 1fr));
-      gap: 10px;
       margin-bottom: 14px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .portfolio-value-label {
+      color: #8a91a4;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .portfolio-value-large {
+      color: #f4f6ff;
+      font-size: 46px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .portfolio-change-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 12px;
+      color: #8a91a4;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .portfolio-change-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      color: #05060a;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .portfolio-change-pill.up { background: #42c981; }
+    .portfolio-change-pill.dn { background: #ff6b6b; }
+    .portfolio-metric-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(90px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
     }
     .portfolio-metric {
       border: 1px solid #1a1e28;
@@ -891,24 +930,51 @@
     }
     .portfolio-metric-value {
       color: #f4f6ff;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 800;
     }
     .portfolio-positive { color: #42c981; }
     .portfolio-negative { color: #ff6b6b; }
     .portfolio-chart {
-      min-height: 220px;
-      border: 1px solid #1a1e28;
-      border-radius: 10px;
-      background: #0f1219;
-      padding: 12px;
+      min-height: 310px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 4px 0 0;
       overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
     }
     .portfolio-chart svg {
       width: 100%;
-      height: 220px;
+      height: 230px;
       display: block;
+    }
+    .portfolio-range-tabs {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+      margin-top: 12px;
+      padding: 6px;
+      border-radius: 999px;
+      background: #10131b;
+      border: 1px solid #1a1e28;
+    }
+    .portfolio-range-tab {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #8a91a4;
+      cursor: pointer;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 8px 6px;
+      min-width: 0;
+    }
+    .portfolio-range-tab.active {
+      background: #f4f6ff;
+      color: #15151d;
+      box-shadow: 0 6px 16px rgba(0,0,0,.22);
     }
     .portfolio-chart-note {
       color: #6b7488;
@@ -2124,7 +2190,6 @@
           </div>
           <div id="portfolioSummary" class="portfolio-summary"></div>
           <div class="portfolio-chart" id="portfolioChart"></div>
-          <div class="portfolio-chart-note">Chart points are saved on holding saves and refreshes.</div>
           <div id="portfolioHoldings">
             <div class="portfolio-empty">Login and save holdings to see your portfolio.</div>
           </div>
@@ -2251,7 +2316,7 @@ const AUTH_LOGOUT = '/api/auth/logout';
 const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...';
 const LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
 const MESSAGE_TAB_POLL_MS = 5000;
-const NOTIFICATION_POLL_MS = 60000;
+const NOTIFICATION_POLL_MS = 15000;
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -2282,6 +2347,15 @@ const COIN_NAMES = {
 };
 
 const DEFAULT_MARKET_SYMBOLS = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOGE', 'LINK', 'DOT', 'LTC'];
+const PORTFOLIO_RANGES = [
+  { key: 'all', label: 'All', seconds: null },
+  { key: '1d', label: '1D', seconds: 86400 },
+  { key: '1w', label: '1W', seconds: 604800 },
+  { key: '1m', label: '1M', seconds: 2592000 },
+  { key: '3m', label: '3M', seconds: 7776000 },
+  { key: '6m', label: '6M', seconds: 15552000 },
+  { key: '1y', label: '1Y', seconds: 31536000 },
+];
 
 let P = Object.fromEntries(DEFAULT_MARKET_SYMBOLS.map(symbol => [symbol, { p: null, c: null, d: 0 }]));
 let hist = [];
@@ -2289,6 +2363,8 @@ let busy = false;
 let chatMode = localStorage.getItem('cryptoAgentChatMode') || 'instant';
 let notificationState = { events: [], settings: [], unreadCount: 0 };
 let notificationPoll = null;
+let notificationEventSeen = new Set();
+let notificationEventInitial = true;
 let friendState = { friends: [], sent: [], received: [], searchResults: [] };
 let directChatState = { conversation: null, messages: [] };
 let messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
@@ -2299,6 +2375,7 @@ let messageNotificationSeen = new Map();
 let messageNotificationInitial = true;
 let recommendationState = [];
 let portfolioState = { holdings: [], snapshots: [], summary: null, draft: [], errors: [], error: '' };
+let portfolioRange = localStorage.getItem('cryptoAgentPortfolioRange') || 'all';
 let recommendationChipsDismissed = false;
 let agentGreetingText = '';
 let mainTab = 'agent';
@@ -2336,7 +2413,8 @@ function isPanelOpen(panelId) {
 }
 
 function initialPage() {
-  return document.body.dataset.initialPage || 'home';
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return tab || document.body.dataset.initialPage || 'home';
 }
 
 function applyTheme(theme) {
@@ -2636,7 +2714,7 @@ function renderNotifications() {
 
   const events = notificationState.events || [];
   if (!events.length) {
-    list.innerHTML = '<div class="notif-empty">No notifications yet. Price alerts and forum replies will appear here.</div>';
+    list.innerHTML = '<div class="notif-empty">No notifications yet. Price alerts, direct messages, and forum activity will appear here.</div>';
   } else {
     list.innerHTML = events.map(event => `
       <div class="notif-item ${event.readAt ? '' : 'unread'}" ${event.linkUrl ? `onclick="window.location.href='${escapeJS(event.linkUrl)}'" style="cursor:pointer"` : ''}>
@@ -3188,6 +3266,8 @@ async function loadMessageTab(options = {}) {
   if (!authState.authenticated) {
     closeMessageTabSocket();
     messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
+    notificationEventSeen.clear();
+    notificationEventInitial = true;
     messageNotificationSeen.clear();
     messageNotificationInitial = true;
     renderMessageTab();
@@ -3380,6 +3460,19 @@ function notifyCreatedPriceAlerts(events) {
   });
 }
 
+function notifyNewAppEvents(events, initial = false) {
+  const toastTypes = new Set(['direct_message', 'forum_reply', 'forum_reaction', 'forum_share']);
+  const ordered = [...(events || [])].reverse();
+  for (const event of ordered) {
+    const id = String(event.id || '');
+    if (!id) continue;
+    const seen = notificationEventSeen.has(id);
+    notificationEventSeen.add(id);
+    if (initial || seen || event.readAt || !toastTypes.has(event.eventType)) continue;
+    notifyUser(event.title || 'Crypto Agent', event.message || 'New activity', `${event.eventType}-${id}`);
+  }
+}
+
 function applyNotificationPayload(data, options = {}) {
   notificationState = {
     events: data.events || [],
@@ -3387,6 +3480,7 @@ function applyNotificationPayload(data, options = {}) {
     unreadCount: data.unreadCount || 0,
   };
   renderNotifications();
+  notifyNewAppEvents(notificationState.events, options.initialEvents);
   if (options.notifyCreated) {
     notifyCreatedPriceAlerts(data.created || []);
   }
@@ -3405,7 +3499,8 @@ async function loadNotifications(check = false) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load notifications');
-    applyNotificationPayload(data, { notifyCreated: check });
+    applyNotificationPayload(data, { notifyCreated: check, initialEvents: notificationEventInitial });
+    notificationEventInitial = false;
     return data;
   } catch (e) {
     console.error(e);
@@ -3416,6 +3511,7 @@ async function loadNotifications(check = false) {
 function startNotificationPolling() {
   if (notificationPoll) clearInterval(notificationPoll);
   if (!authState.authenticated) return;
+  notificationEventInitial = true;
   loadNotifications(true);
   notificationPoll = setInterval(() => loadNotifications(true), NOTIFICATION_POLL_MS);
 }
@@ -3423,6 +3519,8 @@ function startNotificationPolling() {
 function stopNotificationPolling() {
   if (notificationPoll) clearInterval(notificationPoll);
   notificationPoll = null;
+  notificationEventSeen.clear();
+  notificationEventInitial = true;
 }
 
 function toggleNotifications() {
@@ -3558,6 +3656,49 @@ function portfolioPlClass(value) {
   return number > 0 ? 'portfolio-positive' : 'portfolio-negative';
 }
 
+function portfolioSnapshots() {
+  return portfolioState.snapshots
+    .map(snapshot => ({
+      value: Number(snapshot.totalValueUsd),
+      cost: Number(snapshot.totalCostUsd),
+      pl: Number(snapshot.totalPlUsd),
+      plPercent: Number(snapshot.totalPlPercent),
+      createdAt: Number(snapshot.createdAt),
+    }))
+    .filter(point => Number.isFinite(point.value));
+}
+
+function selectedPortfolioRangeConfig() {
+  return PORTFOLIO_RANGES.find(item => item.key === portfolioRange) || PORTFOLIO_RANGES[0];
+}
+
+function portfolioPointsForRange() {
+  const points = portfolioSnapshots();
+  const range = selectedPortfolioRangeConfig();
+  if (!range.seconds || !points.length) return points;
+  const latestTime = points.reduce((max, point) => Math.max(max, point.createdAt || 0), 0);
+  const cutoff = latestTime - range.seconds;
+  const filtered = points.filter(point => !point.createdAt || point.createdAt >= cutoff);
+  return filtered.length ? filtered : points.slice(-1);
+}
+
+function portfolioRangeLabel() {
+  return selectedPortfolioRangeConfig().label;
+}
+
+function setPortfolioRange(rangeKey) {
+  if (!PORTFOLIO_RANGES.some(item => item.key === rangeKey)) return;
+  portfolioRange = rangeKey;
+  localStorage.setItem('cryptoAgentPortfolioRange', portfolioRange);
+  renderPortfolioSummary();
+  renderPortfolioChart();
+}
+
+function fmtPortfolioDate(epoch, options = {}) {
+  if (!epoch) return '';
+  return new Date(epoch * 1000).toLocaleDateString('en-US', options);
+}
+
 function applyPortfolioPayload(data) {
   portfolioState.holdings = Array.isArray(data.holdings) ? data.holdings : [];
   portfolioState.snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
@@ -3578,22 +3719,38 @@ function renderPortfolioSummary() {
   const totalCost = summary.totalCostUsd ?? 0;
   const totalPl = summary.totalPlUsd ?? 0;
   const totalPlPercent = summary.totalPlPercent ?? 0;
+  const points = portfolioPointsForRange();
+  const latestPoint = points[points.length - 1];
+  const firstPoint = points[0];
+  const rangeChange = latestPoint && firstPoint ? latestPoint.value - firstPoint.value : totalPl;
+  const rangeChangePercent = firstPoint && firstPoint.value
+    ? (rangeChange / firstPoint.value) * 100
+    : totalPlPercent;
+  const changeClass = portfolioPlClass(rangeChange);
+  const arrow = Number(rangeChange) >= 0 ? 'up' : 'dn';
+  const arrowSymbol = Number(rangeChange) >= 0 ? '+' : '-';
   root.innerHTML = `
-    <div class="portfolio-metric">
-      <div class="portfolio-metric-label">Value</div>
-      <div class="portfolio-metric-value">${fmtUsd(totalValue)}</div>
+    <div class="portfolio-value-label">Estimated value</div>
+    <div class="portfolio-value-large">${fmtUsd(totalValue)}</div>
+    <div class="portfolio-change-row">
+      <span class="${changeClass}">${fmtSignedUsd(rangeChange)}</span>
+      <span class="portfolio-change-pill ${arrow}">${arrowSymbol}</span>
+      <span class="${changeClass}">${fmtPercent(rangeChangePercent)}</span>
+      <span>${portfolioRangeLabel()}</span>
     </div>
-    <div class="portfolio-metric">
-      <div class="portfolio-metric-label">Cost</div>
-      <div class="portfolio-metric-value">${fmtUsd(totalCost)}</div>
-    </div>
-    <div class="portfolio-metric">
-      <div class="portfolio-metric-label">P/L</div>
-      <div class="portfolio-metric-value ${portfolioPlClass(totalPl)}">${fmtSignedUsd(totalPl)}</div>
-    </div>
-    <div class="portfolio-metric">
-      <div class="portfolio-metric-label">P/L %</div>
-      <div class="portfolio-metric-value ${portfolioPlClass(totalPlPercent)}">${fmtPercent(totalPlPercent)}</div>
+    <div class="portfolio-metric-strip">
+      <div class="portfolio-metric">
+        <div class="portfolio-metric-label">Cost</div>
+        <div class="portfolio-metric-value">${fmtUsd(totalCost)}</div>
+      </div>
+      <div class="portfolio-metric">
+        <div class="portfolio-metric-label">Total P/L</div>
+        <div class="portfolio-metric-value ${portfolioPlClass(totalPl)}">${fmtSignedUsd(totalPl)}</div>
+      </div>
+      <div class="portfolio-metric">
+        <div class="portfolio-metric-label">Total P/L %</div>
+        <div class="portfolio-metric-value ${portfolioPlClass(totalPlPercent)}">${fmtPercent(totalPlPercent)}</div>
+      </div>
     </div>
   `;
 }
@@ -3605,56 +3762,79 @@ function renderPortfolioChart() {
     root.innerHTML = '<div class="portfolio-empty">Login to view your portfolio chart.</div>';
     return;
   }
-  const points = portfolioState.snapshots
-    .map(snapshot => ({ value: Number(snapshot.totalValueUsd), createdAt: Number(snapshot.createdAt) }))
-    .filter(point => Number.isFinite(point.value));
+  const allPoints = portfolioSnapshots();
+  const points = portfolioPointsForRange();
   if (!points.length) {
     root.innerHTML = '<div class="portfolio-empty">No chart snapshots yet. Save or refresh holdings to create the first point.</div>';
     return;
   }
 
   const width = 640;
-  const height = 220;
-  const padX = 28;
-  const padY = 24;
+  const height = 230;
+  const padX = 36;
+  const padY = 28;
   const values = points.map(point => point.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = max - min || Math.max(max, 1);
+  const visualPad = Math.max((max - min) * 0.14, max * 0.015, 1);
+  const domainMin = Math.max(0, min - visualPad);
+  const domainMax = max + visualPad;
+  const span = domainMax - domainMin || Math.max(domainMax, 1);
   const coords = points.map((point, index) => {
     const x = points.length === 1
       ? width / 2
       : padX + (index / (points.length - 1)) * (width - padX * 2);
-    const y = height - padY - ((point.value - min) / span) * (height - padY * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    const y = height - padY - ((point.value - domainMin) / span) * (height - padY * 2);
+    return { x, y, point };
   });
   const latest = points[points.length - 1];
-  const latestDate = latest.createdAt
-    ? new Date(latest.createdAt * 1000).toLocaleString()
-    : 'Latest snapshot';
-  const linePoints = coords.join(' ');
+  const first = points[0];
+  const isPositive = !first || latest.value >= first.value;
+  const lineColor = isPositive ? '#56c878' : '#ff6b6b';
+  const gradientId = isPositive ? 'portfolioAreaUp' : 'portfolioAreaDown';
+  const linePoints = coords.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const areaPoints = `${padX},${height - padY} ${linePoints} ${width - padX},${height - padY}`;
+  const labels = coords.length > 1
+    ? [
+        coords[0],
+        coords[Math.floor((coords.length - 1) / 2)],
+        coords[coords.length - 1],
+      ]
+    : coords;
+  const minLabel = fmtUsd(domainMin);
+  const maxLabel = fmtUsd(domainMax);
   root.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Portfolio value chart">
       <defs>
-        <linearGradient id="portfolioLineGlow" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#7d68ff" stop-opacity=".35"></stop>
-          <stop offset="100%" stop-color="#7d68ff" stop-opacity="0"></stop>
+        <linearGradient id="portfolioAreaUp" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#56c878" stop-opacity=".34"></stop>
+          <stop offset="100%" stop-color="#56c878" stop-opacity="0"></stop>
+        </linearGradient>
+        <linearGradient id="portfolioAreaDown" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ff6b6b" stop-opacity=".30"></stop>
+          <stop offset="100%" stop-color="#ff6b6b" stop-opacity="0"></stop>
         </linearGradient>
       </defs>
       <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="#242938" stroke-width="1"></line>
-      <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${height - padY}" stroke="#242938" stroke-width="1"></line>
-      <polygon points="${areaPoints}" fill="url(#portfolioLineGlow)"></polygon>
-      <polyline points="${linePoints}" fill="none" stroke="#9b8cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
-      ${coords.map(point => {
-        const [x, y] = point.split(',');
-        return `<circle cx="${x}" cy="${y}" r="4" fill="#ef9f27"></circle>`;
-      }).join('')}
-      <text x="${padX}" y="18" fill="#6b7488" font-size="11">${escape(latestDate)}</text>
-      <text x="${width - padX}" y="18" fill="#f4f6ff" font-size="15" font-weight="700" text-anchor="end">${fmtUsd(latest.value)}</text>
-      <text x="${padX}" y="${height - 6}" fill="#6b7488" font-size="10">${fmtUsd(min)}</text>
-      <text x="${width - padX}" y="${height - 6}" fill="#6b7488" font-size="10" text-anchor="end">${fmtUsd(max)}</text>
+      <polygon points="${areaPoints}" fill="url(#${gradientId})"></polygon>
+      <polyline points="${linePoints}" fill="none" stroke="${lineColor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      <circle cx="${coords[coords.length - 1].x.toFixed(1)}" cy="${coords[coords.length - 1].y.toFixed(1)}" r="4" fill="${lineColor}"></circle>
+      <text x="${width - 4}" y="${padY + 6}" fill="#c9cedb" font-size="13" text-anchor="end">${escape(maxLabel)}</text>
+      <text x="${width - 4}" y="${height - padY + 5}" fill="#c9cedb" font-size="13" text-anchor="end">${escape(minLabel)}</text>
+      ${labels.map(({ x, point }, index) => `
+        <text x="${x.toFixed(1)}" y="${height - 4}" fill="#8a91a4" font-size="12" text-anchor="${index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'}">
+          ${escape(fmtPortfolioDate(point.createdAt, { month: 'short', day: 'numeric' }) || `Point ${index + 1}`)}
+        </text>
+      `).join('')}
     </svg>
+    <div class="portfolio-range-tabs" role="tablist" aria-label="Portfolio chart range">
+      ${PORTFOLIO_RANGES.map(range => `
+        <button class="portfolio-range-tab ${portfolioRange === range.key ? 'active' : ''}" type="button" onclick="setPortfolioRange('${range.key}')">
+          ${range.label}
+        </button>
+      `).join('')}
+    </div>
+    <div class="portfolio-chart-note">${allPoints.length} saved snapshot${allPoints.length === 1 ? '' : 's'} - Chart updates when you save holdings or refresh prices.</div>
   `;
 }
 
@@ -4204,6 +4384,10 @@ function applyInitialPage() {
   const page = initialPage();
   if (page === 'friends') {
     setMainTab('friends');
+    return;
+  }
+  if (['agent', 'portfolio', 'messages', 'notes'].includes(page)) {
+    setMainTab(page);
     return;
   }
   if (page === 'profiles') {

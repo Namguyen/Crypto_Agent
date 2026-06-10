@@ -71,6 +71,19 @@ def user_is_conversation_participant(user_id: int | str, conversation_id: int | 
     return bool(row)
 
 
+def conversation_recipient_ids(sender_id: int | str, conversation_id: int | str) -> list[str]:
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id
+            FROM conversation_participants
+            WHERE conversation_id = ? AND user_id != ?
+            """,
+            (str(conversation_id), str(sender_id)),
+        ).fetchall()
+    return [str(row["user_id"]) for row in rows]
+
+
 def get_or_create_direct_conversation(user_id: int | str, friend_id: int | str) -> dict:
     user_a, user_b = friendship_pair(user_id, friend_id)
     now = int(time.time())

@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from backend.auth.dependencies import decode_access_token
 from backend.auth.dependencies import require_user
+from backend.auth.store import create_general_notification_event
+from backend.chat.store import conversation_recipient_ids
 from backend.chat.service import (
     ChatError,
     conversation_list,
@@ -95,6 +97,19 @@ async def create_message(conversation_id: str, payload: MessageCreate, user=Depe
         message = send_conversation_message(user["id"], conversation_id, payload.content)
     except ChatError as error:
         return chat_error_response(error)
+    preview = message["content"][:140].strip()
+    if len(message["content"]) > 140:
+        preview += "..."
+    for recipient_id in conversation_recipient_ids(user["id"], conversation_id):
+        create_general_notification_event(
+            user_id=recipient_id,
+            event_type="direct_message",
+            symbol="DM",
+            coin_id=f"conversation:{conversation_id}",
+            title=f"New message from {user['username']}",
+            message=preview or "Open Messages to reply.",
+            link_url="/?tab=messages",
+        )
     await socket_manager.broadcast_message(conversation_id, message)
     return JSONResponse({"message": message}, status_code=201)
 

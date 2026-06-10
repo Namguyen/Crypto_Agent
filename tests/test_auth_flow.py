@@ -389,6 +389,17 @@ class AuthFlowTest(unittest.TestCase):
             self.assertAlmostEqual(refreshed["summary"]["totalPlUsd"], 1900.0)
             self.assertGreaterEqual(len(refreshed["snapshots"]), 2)
 
+            from backend import app as backend_app
+
+            previous_auto_snapshot_seconds = backend_app.PORTFOLIO_AUTO_SNAPSHOT_SECONDS
+            backend_app.PORTFOLIO_AUTO_SNAPSHOT_SECONDS = 0
+            try:
+                auto_snapshot = client.get("/api/portfolio", headers=owner_headers)
+            finally:
+                backend_app.PORTFOLIO_AUTO_SNAPSHOT_SECONDS = previous_auto_snapshot_seconds
+            self.assertEqual(auto_snapshot.status_code, 200)
+            self.assertGreater(len(auto_snapshot.json()["snapshots"]), len(refreshed["snapshots"]))
+
             other_register = client.post(
                 "/api/auth/register",
                 json={
@@ -801,6 +812,16 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(reacted_post["reactionCounts"]["fire"], 1)
             self.assertEqual(reacted_post["myReaction"], "fire")
 
+            reply_user_notifications = client.get("/api/notifications", headers=reply_headers)
+            self.assertEqual(reply_user_notifications.status_code, 200)
+            reaction_events = [
+                event
+                for event in reply_user_notifications.json()["events"]
+                if event["eventType"] == "forum_reaction"
+            ]
+            self.assertTrue(reaction_events)
+            self.assertEqual(reaction_events[0]["linkUrl"], f"/forum?topic={topic['id']}")
+
             removed_reaction = client.post(
                 f"/api/forum/posts/{post_id}/reaction",
                 json={"reaction": None},
@@ -810,6 +831,17 @@ class AuthFlowTest(unittest.TestCase):
             unreacted_post = next(post for post in removed_reaction.json()["posts"] if post["id"] == post_id)
             self.assertNotIn("fire", unreacted_post["reactionCounts"])
             self.assertEqual(unreacted_post["myReaction"], "")
+
+            shared = client.post(f"/api/forum/topics/{topic['id']}/share", headers=reply_headers)
+            self.assertEqual(shared.status_code, 200)
+            owner_notifications_after_share = client.get("/api/notifications", headers=headers)
+            share_events = [
+                event
+                for event in owner_notifications_after_share.json()["events"]
+                if event["eventType"] == "forum_share"
+            ]
+            self.assertTrue(share_events)
+            self.assertEqual(share_events[0]["linkUrl"], f"/forum?topic={topic['id']}")
 
             topics = client.get("/api/forum/topics", headers=headers)
             self.assertEqual(topics.status_code, 200)
@@ -825,6 +857,14 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(summary.json()["model"], "test-summary-model")
             self.assertEqual(summary.json()["topic"]["summary"], "BTC thread summary")
             summarize.assert_called_once()
+
+            other_detail = client.get(f"/api/forum/topics/{topic['id']}", headers=reply_headers)
+            self.assertEqual(other_detail.status_code, 200)
+            self.assertEqual(other_detail.json()["topic"]["summary"], "")
+            other_topics = client.get("/api/forum/topics", headers=reply_headers)
+            self.assertEqual(other_topics.status_code, 200)
+            other_topic = next(item for item in other_topics.json()["topics"] if item["id"] == topic["id"])
+            self.assertEqual(other_topic["summary"], "")
 
             cleared_summary = client.delete(f"/api/forum/topics/{topic['id']}/summary", headers=headers)
             self.assertEqual(cleared_summary.status_code, 200)
@@ -1154,7 +1194,9 @@ class AuthFlowTest(unittest.TestCase):
                 for event in bob_notifications.json()["events"]
                 if event["eventType"] == "direct_message"
             ]
-            self.assertFalse(direct_events)
+            self.assertTrue(direct_events)
+            self.assertTrue(any(event["linkUrl"] == "/?tab=messages" for event in direct_events))
+            self.assertTrue(any("BTC moved fast today." in event["message"] for event in direct_events))
 
             marked_read = client.post(
                 f"/api/conversations/{conversation_id}/read",

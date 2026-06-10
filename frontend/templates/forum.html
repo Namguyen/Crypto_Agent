@@ -296,6 +296,7 @@
           <div class="body-text">${esc(topic.body)}</div>
           <div class="actions">
             <button onclick="summarizeTopic('${esc(topic.id)}')">AI summarize</button>
+            <button onclick="shareTopic('${esc(topic.id)}')">Share</button>
           </div>
         </div>
         ${topic.summary ? `
@@ -427,6 +428,22 @@
       forumState.topic = data.topic;
       renderThread();
       await refreshForum();
+    }
+
+    async function shareTopic(topicId) {
+      const url = `${window.location.origin}/forum?topic=${encodeURIComponent(topicId)}`;
+      try {
+        await navigator.clipboard?.writeText(url);
+      } catch (e) {
+        console.error(e);
+      }
+      const res = await authFetch(`${API_FORUM_TOPICS}/${encodeURIComponent(topicId)}/share`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Could not share topic');
+        return;
+      }
+      alert('Topic link copied');
     }
 
     async function setPostReaction(postId, reaction) {

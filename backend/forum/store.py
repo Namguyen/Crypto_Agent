@@ -58,6 +58,22 @@ def init_forum_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_forum_post_reactions_user_id
                 ON forum_post_reactions(user_id);
+
+            CREATE TABLE IF NOT EXISTS forum_topic_summaries (
+                topic_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                summary TEXT NOT NULL,
+                summary_model TEXT NOT NULL,
+                summary_updated_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY(topic_id, user_id),
+                FOREIGN KEY(topic_id) REFERENCES forum_topics(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_forum_topic_summaries_user_topic
+                ON forum_topic_summaries(user_id, topic_id);
             """
         )
 
@@ -73,7 +89,7 @@ def public_forum_author(row: sqlite3.Row | dict, prefix: str = "author") -> dict
 
 
 def public_topic(row: sqlite3.Row | dict) -> dict:
-    summary_updated_at = row["summary_updated_at"] if "summary_updated_at" in row.keys() else None
+    summary_updated_at = row["user_summary_updated_at"] if "user_summary_updated_at" in row.keys() else None
     return {
         "id": str(row["id"]),
         "title": row["title"],
@@ -84,8 +100,8 @@ def public_topic(row: sqlite3.Row | dict) -> dict:
         "createdAt": int(row["created_at"]),
         "updatedAt": int(row["updated_at"]),
         "lastPostAt": int(row["last_post_at"]),
-        "summary": (row["summary"] if "summary" in row.keys() else "") or "",
-        "summaryModel": (row["summary_model"] if "summary_model" in row.keys() else "") or "",
+        "summary": (row["user_summary"] if "user_summary" in row.keys() else "") or "",
+        "summaryModel": (row["user_summary_model"] if "user_summary_model" in row.keys() else "") or "",
         "summaryUpdatedAt": int(summary_updated_at) if summary_updated_at else None,
     }
 
@@ -145,13 +161,16 @@ def hydrate_post_reactions(posts: list[dict], current_user_id: int | str | None 
     return posts
 
 
-def list_topics(limit: int = 50) -> list[dict]:
+def list_topics(limit: int = 50, current_user_id: int | str | None = None) -> list[dict]:
     safe_limit = max(1, min(int(limit or 50), 100))
     with auth_connection() as conn:
         rows = conn.execute(
             """
             SELECT
                 t.*,
+                s.summary AS user_summary,
+                s.summary_model AS user_summary_model,
+                s.summary_updated_at AS user_summary_updated_at,
                 u.id AS author_id,
                 u.username AS author_username,
                 u.display_name AS author_display_name,
@@ -159,13 +178,15 @@ def list_topics(limit: int = 50) -> list[dict]:
                 COUNT(p.id) AS reply_count
             FROM forum_topics t
             JOIN users u ON u.id = t.user_id
+            LEFT JOIN forum_topic_summaries s
+                ON s.topic_id = t.id AND s.user_id = ?
             LEFT JOIN forum_posts p ON p.topic_id = t.id
             WHERE u.disabled_at IS NULL
             GROUP BY t.id
             ORDER BY t.last_post_at DESC, t.id DESC
             LIMIT ?
             """,
-            (safe_limit,),
+            (str(current_user_id) if current_user_id is not None else "", safe_limit),
         ).fetchall()
     return [public_topic(row) for row in rows]
 
@@ -181,18 +202,21 @@ def create_topic(user_id: int | str, title: str, body: str) -> dict:
             (str(user_id), title, body, now, now, now),
         )
         topic_id = cursor.lastrowid
-    topic = get_topic(topic_id)
+    topic = get_topic(topic_id, current_user_id=user_id)
     if not topic:
         raise RuntimeError("Topic was not created")
     return topic
 
 
-def get_topic(topic_id: int | str) -> Optional[dict]:
+def get_topic(topic_id: int | str, current_user_id: int | str | None = None) -> Optional[dict]:
     with auth_connection() as conn:
         row = conn.execute(
             """
             SELECT
                 t.*,
+                s.summary AS user_summary,
+                s.summary_model AS user_summary_model,
+                s.summary_updated_at AS user_summary_updated_at,
                 u.id AS author_id,
                 u.username AS author_username,
                 u.display_name AS author_display_name,
@@ -200,11 +224,13 @@ def get_topic(topic_id: int | str) -> Optional[dict]:
                 COUNT(p.id) AS reply_count
             FROM forum_topics t
             JOIN users u ON u.id = t.user_id
+            LEFT JOIN forum_topic_summaries s
+                ON s.topic_id = t.id AND s.user_id = ?
             LEFT JOIN forum_posts p ON p.topic_id = t.id
             WHERE t.id = ? AND u.disabled_at IS NULL
             GROUP BY t.id
             """,
-            (str(topic_id),),
+            (str(current_user_id) if current_user_id is not None else "", str(topic_id)),
         ).fetchone()
     return public_topic(row) if row else None
 
@@ -259,6 +285,13 @@ def create_post(user_id: int | str, topic_id: int | str, content: str) -> Option
             WHERE id = ?
             """,
             (now, now, str(topic_id)),
+        )
+        conn.execute(
+            """
+            DELETE FROM forum_topic_summaries
+            WHERE topic_id = ?
+            """,
+            (str(topic_id),),
         )
         row = conn.execute(
             """
@@ -347,37 +380,38 @@ def forum_reply_notification_recipients(topic_id: int | str, actor_user_id: int 
     return [str(row["user_id"]) for row in rows]
 
 
-def save_topic_summary(topic_id: int | str, summary: str, model: str) -> Optional[dict]:
+def save_topic_summary(topic_id: int | str, user_id: int | str, summary: str, model: str) -> Optional[dict]:
     now = int(time.time())
     with auth_connection() as conn:
-        cursor = conn.execute(
+        topic = conn.execute("SELECT id FROM forum_topics WHERE id = ?", (str(topic_id),)).fetchone()
+        if not topic:
+            return None
+        conn.execute(
             """
-            UPDATE forum_topics
-            SET summary = ?,
-                summary_model = ?,
-                summary_updated_at = ?,
-                updated_at = ?
-            WHERE id = ?
+            INSERT INTO forum_topic_summaries
+                (topic_id, user_id, summary, summary_model, summary_updated_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(topic_id, user_id) DO UPDATE SET
+                summary = excluded.summary,
+                summary_model = excluded.summary_model,
+                summary_updated_at = excluded.summary_updated_at,
+                updated_at = excluded.updated_at
             """,
-            (summary, model, now, now, str(topic_id)),
+            (str(topic_id), str(user_id), summary, model, now, now, now),
         )
-        changed = cursor.rowcount
-    return get_topic(topic_id) if changed else None
+    return get_topic(topic_id, current_user_id=user_id)
 
 
-def clear_topic_summary(topic_id: int | str) -> Optional[dict]:
-    now = int(time.time())
+def clear_topic_summary(topic_id: int | str, user_id: int | str) -> Optional[dict]:
     with auth_connection() as conn:
-        cursor = conn.execute(
+        topic = conn.execute("SELECT id FROM forum_topics WHERE id = ?", (str(topic_id),)).fetchone()
+        if not topic:
+            return None
+        conn.execute(
             """
-            UPDATE forum_topics
-            SET summary = NULL,
-                summary_model = NULL,
-                summary_updated_at = NULL,
-                updated_at = ?
-            WHERE id = ?
+            DELETE FROM forum_topic_summaries
+            WHERE topic_id = ? AND user_id = ?
             """,
-            (now, str(topic_id)),
+            (str(topic_id), str(user_id)),
         )
-        changed = cursor.rowcount
-    return get_topic(topic_id) if changed else None
+    return get_topic(topic_id, current_user_id=user_id)

@@ -64,6 +64,7 @@ from backend.portfolio.store import (
     create_portfolio_snapshot,
     delete_portfolio_holding,
     init_portfolio_db,
+    latest_portfolio_snapshot,
     list_portfolio_holdings,
     portfolio_payload,
     upsert_portfolio_holdings,
@@ -118,6 +119,7 @@ DEV_RELOAD_PATHS = [
 dev_reload_cache = {"checked_at": 0.0, "version": "0"}
 market_price_cache = {"checked_at": 0.0, "prices": []}
 MARKET_PRICE_CACHE_TTL_SECONDS = 25
+PORTFOLIO_AUTO_SNAPSHOT_SECONDS = int(os.getenv("PORTFOLIO_AUTO_SNAPSHOT_SECONDS", str(60 * 60)))
 AGENT_GREETING_SYMBOL_RE = re.compile(
     r"\b(BTC|ETH|SOL|BNB|XRP|ADA|AVAX|DOGE|LINK|DOT|LTC)\b",
     re.IGNORECASE,
@@ -990,6 +992,33 @@ def check_price_notifications_for_user(user: dict) -> list[dict]:
     return created
 
 
+def maybe_create_auto_portfolio_snapshot(user_id: int | str) -> Optional[str]:
+    holdings = list_portfolio_holdings(user_id)
+    if not holdings:
+        return None
+
+    latest = latest_portfolio_snapshot(user_id)
+    now = int(time.time())
+    if latest and latest.get("createdAt") and now - int(latest["createdAt"]) < PORTFOLIO_AUTO_SNAPSHOT_SECONDS:
+        return None
+
+    coin_ids = [holding["coinId"] for holding in holdings]
+    try:
+        price_data = fetch_market_prices(coin_ids)
+        price_by_symbol = {
+            MARKET_SYMBOLS[coin_id]: float(row["usd"])
+            for coin_id, row in price_data.items()
+            if coin_id in MARKET_SYMBOLS and row.get("usd") is not None
+        }
+        if not price_by_symbol:
+            return "Could not refresh automatic portfolio snapshot prices"
+        update_holding_valuations(user_id, price_by_symbol, priced_at=now)
+        create_portfolio_snapshot(user_id)
+    except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+        return f"Could not create automatic portfolio snapshot: {exc}"
+    return None
+
+
 @app.get("/api/price-data")
 def price_data():
     now = time.monotonic()
@@ -1196,7 +1225,11 @@ def notes_clear(user=Depends(require_user)):
 def portfolio_get(user=Depends(require_user)):
     if isinstance(user, JSONResponse):
         return user
-    return portfolio_payload(user["id"])
+    snapshot_error = maybe_create_auto_portfolio_snapshot(user["id"])
+    payload = portfolio_payload(user["id"])
+    if snapshot_error:
+        payload["error"] = snapshot_error
+    return payload
 
 
 @app.post("/api/portfolio/parse")
