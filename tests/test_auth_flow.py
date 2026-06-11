@@ -169,6 +169,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="mainTabAgent"', index.text)
             self.assertIn('id="mainTabPortfolio"', index.text)
             self.assertIn('id="mainTabMessages"', index.text)
+            self.assertIn('id="mainTabNotifications"', index.text)
             self.assertIn('id="mainTabFriends"', index.text)
             self.assertIn('id="mainTabNotes"', index.text)
             self.assertIn('id="mainTabForum"', index.text)
@@ -177,14 +178,25 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="agentView"', index.text)
             self.assertIn("setMainTab", index.text)
             self.assertIn('id="chatModePicker"', index.text)
+            self.assertIn('id="chatFileInput"', index.text)
+            self.assertIn('id="chatAttachments"', index.text)
             self.assertIn('id="modeMenu"', index.text)
             self.assertIn("setChatModeFromMenu", index.text)
+            self.assertIn("chatRequestOptions", index.text)
+            self.assertIn("handleChatFilesSelected", index.text)
+            self.assertIn("thinking-panel", index.text)
+            self.assertIn("attachThinkingPanel", index.text)
+            self.assertIn("toggleThinkingPanel", index.text)
             self.assertIn("hideRecommendationChipsForSession", index.text)
             self.assertIn("recommendationChipsDismissed", index.text)
             self.assertIn('id="accountMenu"', index.text)
             self.assertIn("handleAccountTrigger", index.text)
             self.assertIn('id="messagesCol"', index.text)
             self.assertIn('id="messagesUnreadCount"', index.text)
+            self.assertIn('id="notificationsView"', index.text)
+            self.assertIn('id="notificationUnreadCount"', index.text)
+            self.assertIn('id="notificationList"', index.text)
+            self.assertIn('id="notificationSettings"', index.text)
             self.assertIn('id="friendsView"', index.text)
             self.assertIn('id="friendSearchResults"', index.text)
             self.assertIn('id="portfolioView"', index.text)
@@ -210,7 +222,13 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("DEFAULT_MARKET_SYMBOLS", index.text)
             self.assertIn("API_RECOMMENDATIONS", index.text)
             self.assertIn("loadRecommendations", index.text)
+            self.assertIn("window.location.replace(authState.loginUrl || AUTH_LOGIN)", index.text)
             self.assertIn("CHECK NOW", index.text)
+            self.assertIn("BROWSER", index.text)
+            self.assertIn("new Notification(", index.text)
+            self.assertIn("Notification.requestPermission", index.text)
+            self.assertNotIn("initialAgentMessageHtml", index.text)
+            self.assertNotIn('id="notifPanel"', index.text)
             self.assertIn("/api/dev/reload-version", index.text)
             self.assertNotIn('data-initial-page=', index.text)
             self.assertNotIn('<section class="panel chat" id="socialChatCol"', index.text)
@@ -233,6 +251,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("API_CONVERSATIONS", friends.text)
             self.assertIn("cryptoAgentDirectConversation", friends.text)
             self.assertIn("conversationNotificationPoll", friends.text)
+            self.assertIn("window.location.replace(AUTH_LOGIN)", friends.text)
 
             profiles = client.get("/profiles")
             self.assertEqual(profiles.status_code, 200)
@@ -250,6 +269,7 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="aiFavoriteAssets"', profiles.text)
             self.assertIn("AI AGENT PERSONALIZATION", profiles.text)
             self.assertIn("API_USER_ME", profiles.text)
+            self.assertIn("window.location.replace(AUTH_LOGIN)", profiles.text)
 
             profile = client.get("/profile")
             self.assertEqual(profile.status_code, 200)
@@ -910,14 +930,35 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(logs.json()["logs"][0]["mode"], "reasoning")
             self.assertTrue(logs.json()["logs"][0]["model"])
 
+    def test_chat_file_uploads_are_passed_to_agent(self):
+        with TestClient(self.app) as client, patch("backend.app.run_agent", return_value="file reply") as run_agent:
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+
+            res = client.post(
+                "/api/chat",
+                data={"message": "Review this uploaded plan", "mode": "instant"},
+                files=[("attachments", ("plan.txt", b"BTC support from uploaded file", "text/plain"))],
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json()["reply"], "file reply")
+            uploaded_files = run_agent.call_args.kwargs["uploaded_files"]
+            self.assertEqual(len(uploaded_files), 1)
+            self.assertEqual(uploaded_files[0]["name"], "plan.txt")
+            self.assertIn("BTC support from uploaded file", uploaded_files[0]["text"])
+            self.assertEqual(uploaded_files[0]["error"], "")
+
     def test_chat_stream_returns_sse_tokens(self):
-        with TestClient(self.app) as client, patch("backend.app.run_agent_stream", return_value=iter(["streamed ", "reply"])):
+        with TestClient(self.app) as client, patch("backend.app.run_agent_stream", return_value=iter(["streamed ", "reply"])) as run_agent_stream:
             login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
             token = login.json()["accessToken"]
 
             res = client.post(
                 "/api/chat/stream",
-                json={"message": "Compare BTC and ETH", "mode": "instant"},
+                data={"message": "Compare BTC and ETH", "mode": "instant"},
+                files=[("attachments", ("context.md", b"ETH rotation context", "text/markdown"))],
                 headers={"Authorization": f"Bearer {token}"},
             )
 
@@ -927,6 +968,10 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('"content": "streamed "', res.text)
             self.assertIn('"content": "reply"', res.text)
             self.assertIn('"type": "done"', res.text)
+            uploaded_files = run_agent_stream.call_args.kwargs["uploaded_files"]
+            self.assertEqual(len(uploaded_files), 1)
+            self.assertEqual(uploaded_files[0]["name"], "context.md")
+            self.assertIn("ETH rotation context", uploaded_files[0]["text"])
 
     def test_in_app_price_notifications(self):
         market_payload = {

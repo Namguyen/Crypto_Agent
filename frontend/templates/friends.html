@@ -525,8 +525,7 @@
       localStorage.removeItem(DIRECT_CHAT_LIST_STORAGE_KEY);
       closeDirectChatSocket();
       stopConversationNotifications();
-      renderAuth();
-      renderFriends();
+      window.location.replace(AUTH_LOGIN);
     }
     function item(user, actionHtml = '', meta = '') {
       const ref = encodeURIComponent(user.username || user.id);

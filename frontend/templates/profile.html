@@ -537,7 +537,7 @@
       accessToken = null;
       authState = { authenticated: false, user: null };
       localStorage.removeItem('cryptoAgentDirectConversation');
-      renderProfile();
+      window.location.replace(AUTH_LOGIN);
     }
     async function saveProfile(event) {
       event.preventDefault();

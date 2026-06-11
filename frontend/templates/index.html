@@ -47,10 +47,16 @@
       align-items: center;
       gap: 28px;
       min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .main-tabs::-webkit-scrollbar {
+      display: none;
     }
     .main-tab {
       position: relative;
       min-width: 0;
+      flex: 0 0 auto;
       height: 56px;
       border: 0;
       border-radius: 0;
@@ -94,6 +100,9 @@
       vertical-align: middle;
     }
     .main-tab-badge.visible { display: inline-flex; }
+    .main-tab-badge.alert {
+      background: #a04050;
+    }
     .hdr-right { display: flex; align-items: center; gap: 10px; }
     .theme-switch {
       display: flex;
@@ -720,6 +729,71 @@
       background: #0b0d11;
       padding: 14px;
     }
+    .notifications-workspace {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #05060a;
+      overflow: hidden;
+    }
+    .notifications-workspace.collapsed {
+      display: none;
+    }
+    .notifications-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+      gap: 16px;
+      padding: 18px 22px;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .notifications-panel {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #1a1e28;
+      border-radius: 10px;
+      background: #0b0d11;
+      overflow: hidden;
+    }
+    .notifications-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #1a1e28;
+    }
+    .notifications-toolbar-title {
+      color: #f4f6ff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .notifications-toolbar-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .notifications-panel .notif-list {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
+    }
+    .notifications-panel .notif-settings {
+      border-top: 0;
+      padding: 14px;
+      gap: 10px;
+    }
+    .notifications-help {
+      color: #4a5268;
+      font-size: 10px;
+      line-height: 1.5;
+      padding: 0 14px 14px;
+    }
     .portfolio-workspace {
       flex: 1;
       min-width: 0;
@@ -1158,7 +1232,19 @@
       align-self: flex-end;
       grid-template-columns: minmax(0, 1fr) 36px;
     }
-    .msg-a { align-self: flex-start; width: 88%; }
+    .msg-a {
+      align-self: stretch;
+      width: 100%;
+      max-width: 100%;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .msg-a .msg-avatar {
+      display: none;
+    }
+    .msg-a .msg-body {
+      grid-column: 1;
+      max-width: min(100%, 980px);
+    }
     .msg-u .msg-avatar {
       grid-column: 2;
       grid-row: 1;
@@ -1217,7 +1303,18 @@
       font-family: Arial, Helvetica, sans-serif;
     }
     .bbl-u { background: #211b51; color: #a99cff; border: 1px solid #4f43a0; font-weight: 700; }
-    .bbl-a { background: #15151d; color: #777b86; border: 1px solid #20222c; position: relative; }
+    .bbl-a {
+      background: transparent;
+      color: #8e98ad;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      position: relative;
+    }
+    .msg-a .bbl {
+      font-size: 17px;
+      line-height: 1.75;
+    }
     .bbl h1,
     .bbl h2,
     .bbl h3 {
@@ -1241,6 +1338,57 @@
     }
     .bbl strong { color: #e9ebf5; }
     .bbl em { color: #aeb4c4; }
+
+    .thinking-panel {
+      width: min(100%, 880px);
+      margin: 0 0 12px;
+      color: #e9ebf5;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .thinking-head {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      background: transparent;
+      color: #e9ebf5;
+      cursor: pointer;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 0;
+    }
+    .thinking-caret {
+      color: #7f8798;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .thinking-panel.collapsed .thinking-caret {
+      transform: rotate(-90deg);
+    }
+    .thinking-body {
+      margin-top: 11px;
+      padding-left: 18px;
+      border-left: 1px solid #2a3040;
+      color: #aeb7c8;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .thinking-panel.collapsed .thinking-body {
+      display: none;
+    }
+    .thinking-body ul {
+      margin: 0;
+      padding-left: 17px;
+    }
+    .thinking-body li {
+      margin: 3px 0;
+    }
+    .thinking-note {
+      color: #6f788a;
+      font-size: 12px;
+      margin-top: 8px;
+    }
 
     /* Actions under messages */
     .msg-actions {
@@ -1308,6 +1456,58 @@
       border-top: 1px solid #1a1e28;
       flex-shrink: 0;
       order: 3;
+    }
+    .input-stack {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 0;
+    }
+    .chat-attachments:empty {
+      display: none;
+    }
+    .attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 240px;
+      gap: 7px;
+      border: 1px solid #242631;
+      border-radius: 999px;
+      background: #10141d;
+      color: #aeb4c2;
+      font-size: 11px;
+      line-height: 1;
+      padding: 7px 8px 7px 10px;
+      overflow: hidden;
+    }
+    .attachment-chip-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .attachment-chip-remove {
+      width: 17px;
+      height: 17px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border: 0;
+      border-radius: 50%;
+      background: #1a1e28;
+      color: #8c95aa;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .attachment-chip-remove:hover {
+      color: #f4f6ff;
+      background: #2c3242;
     }
     .mode-switch {
       position: relative;
@@ -1427,11 +1627,37 @@
       color: #f4f6ff; font-family: Arial, Helvetica, sans-serif; font-size: 20px;
       padding: 10px 0; letter-spacing: .02em;
     }
+    .attach-btn {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #3d403c;
+      border-radius: 8px;
+      background: #15151d;
+      color: #f4f6ff;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .attach-btn:hover {
+      border-color: rgba(120,99,255,.55);
+      color: #d9d2ff;
+    }
+    .attach-btn:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .chat-file-input {
+      display: none;
+    }
     .inp::placeholder { color: #2a3040; }
     .inp:disabled { color: #4a5268; cursor: not-allowed; }
 
     .sbtn {
-      grid-area: send;
+      grid-area: auto;
       width: 46px; height: 46px; border-radius: 10px;
       background: #15151d; border: 1px solid #3a3b45; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
@@ -2029,6 +2255,32 @@
       85% { top: 20px; opacity: 1; }
       100% { top: -40px; opacity: 0; }
     }
+    @media (max-width: 900px) {
+      .hdr {
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding: 0 12px;
+      }
+      .hdr-left {
+        display: none;
+      }
+      .main-tabs {
+        gap: 20px;
+      }
+      .notifications-body {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+      }
+      .notifications-panel {
+        min-height: 240px;
+      }
+      .inp-wrap {
+        gap: 8px;
+        padding: 0 10px;
+      }
+      .inp {
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -2041,6 +2293,7 @@
       <button class="main-tab active" id="mainTabAgent" type="button" onclick="setMainTab('agent')">Agent</button>
       <button class="main-tab" id="mainTabPortfolio" type="button" onclick="setMainTab('portfolio')">Portfolio</button>
       <button class="main-tab" id="mainTabMessages" type="button" onclick="setMainTab('messages')">Messages<span class="main-tab-badge" id="messagesUnreadCount">0</span></button>
+      <button class="main-tab" id="mainTabNotifications" type="button" onclick="setMainTab('notifications')">Notifications<span class="main-tab-badge alert" id="notificationUnreadCount">0</span></button>
       <button class="main-tab" id="mainTabFriends" type="button" onclick="setMainTab('friends')">Friends</button>
       <button class="main-tab" id="mainTabNotes" type="button" onclick="setMainTab('notes')">Notes</button>
       <button class="main-tab" id="mainTabForum" type="button" onclick="window.location.href='/forum'">Forum</button>
@@ -2050,25 +2303,6 @@
         <span>Dark</span>
         <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light theme" onclick="toggleTheme()"><span class="theme-toggle-dot"></span></button>
         <span>Light</span>
-      </div>
-      <div class="notif-wrap">
-        <button class="notif-btn" id="notifBtn" type="button" title="Price notifications" onclick="toggleNotifications()">&#xf0f3;</button>
-        <span class="notif-count" id="notifCount">0</span>
-        <div class="notif-panel" id="notifPanel">
-          <div class="notif-head">
-            <span class="notif-title">PRICE ALERTS</span>
-            <div class="notif-actions">
-              <button class="notif-action" type="button" onclick="checkNotificationsNow()">CHECK NOW</button>
-              <button class="notif-action" type="button" onclick="requestBrowserNotifications()">BROWSER</button>
-              <button class="notif-action" type="button" onclick="markNotificationsRead()">MARK READ</button>
-            </div>
-          </div>
-          <div class="notif-list" id="notifList">
-            <div class="notif-empty">Login to view price alerts.</div>
-          </div>
-          <div class="notif-empty">Market checks use backend fallbacks: Binance, Binance.US, Coinbase, then CoinGecko.</div>
-          <div class="notif-settings" id="notifSettings"></div>
-        </div>
       </div>
       <div class="auth-wrap" id="authWrap">
         <button class="auth-box" id="authBox" type="button" onclick="handleAccountTrigger()" aria-haspopup="menu" aria-expanded="false">
@@ -2125,34 +2359,41 @@
 
       <!-- Input -->
       <div class="input-row">
-        <div class="inp-wrap">
-          <div class="mode-switch" id="chatModePicker">
-            <button class="mode-menu-btn" id="modeMenuBtn" type="button" onclick="toggleChatModeMenu(event)" aria-haspopup="menu" aria-expanded="false">
-              <span id="modeMenuLabel">Instant</span>
-              <span class="mode-effort" id="modeMenuEffort">Low</span>
-              <span class="mode-caret">v</span>
-            </button>
-            <div class="mode-menu" id="modeMenu" role="menu">
-              <button class="mode-option" id="modeOptionInstant" type="button" onclick="setChatModeFromMenu('instant')">
-                <span>
-                  <span class="mode-option-title">Instant</span>
-                  <span class="mode-option-desc">Fastest for quick answers</span>
-                </span>
-                <span class="mode-check" id="modeCheckInstant"></span>
+        <div class="input-stack">
+          <div class="chat-attachments" id="chatAttachments"></div>
+          <div class="inp-wrap">
+            <button class="attach-btn" id="attachBtn" type="button" title="Attach files" aria-label="Attach files" onclick="openChatFilePicker()">+</button>
+            <input class="chat-file-input" id="chatFileInput" type="file" multiple
+              accept=".txt,.md,.csv,.json,.yaml,.yml,.log,.py,.js,.ts,.html,.css,text/*,application/json"
+              onchange="handleChatFilesSelected(event)" />
+            <div class="mode-switch" id="chatModePicker">
+              <button class="mode-menu-btn" id="modeMenuBtn" type="button" onclick="toggleChatModeMenu(event)" aria-haspopup="menu" aria-expanded="false">
+                <span id="modeMenuLabel">Instant</span>
+                <span class="mode-effort" id="modeMenuEffort">Low</span>
+                <span class="mode-caret">v</span>
               </button>
-              <button class="mode-option" id="modeOptionReasoning" type="button" onclick="setChatModeFromMenu('reasoning')">
-                <span>
-                  <span class="mode-option-title">Reasoning</span>
-                  <span class="mode-option-desc">Deeper analysis for harder questions</span>
-                </span>
-                <span class="mode-check" id="modeCheckReasoning"></span>
-              </button>
-              <div class="mode-menu-separator"></div>
-              <div class="mode-menu-row"><span>Effort</span><span id="modeEffortLabel">Low</span></div>
+              <div class="mode-menu" id="modeMenu" role="menu">
+                <button class="mode-option" id="modeOptionInstant" type="button" onclick="setChatModeFromMenu('instant')">
+                  <span>
+                    <span class="mode-option-title">Instant</span>
+                    <span class="mode-option-desc">Fastest for quick answers</span>
+                  </span>
+                  <span class="mode-check" id="modeCheckInstant"></span>
+                </button>
+                <button class="mode-option" id="modeOptionReasoning" type="button" onclick="setChatModeFromMenu('reasoning')">
+                  <span>
+                    <span class="mode-option-title">Reasoning</span>
+                    <span class="mode-option-desc">Deeper analysis for harder questions</span>
+                  </span>
+                  <span class="mode-check" id="modeCheckReasoning"></span>
+                </button>
+                <div class="mode-menu-separator"></div>
+                <div class="mode-menu-row"><span>Effort</span><span id="modeEffortLabel">Low</span></div>
+              </div>
             </div>
+            <input class="inp" id="inp" type="text"
+              placeholder="Ask a question, look up prices, market news..." autocomplete="off" />
           </div>
-          <input class="inp" id="inp" type="text"
-            placeholder="Ask a question, look up prices, market news..." autocomplete="off" />
         </div>
         <button class="sbtn" id="sbtn" onclick="send()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -2254,6 +2495,35 @@
       </div>
     </div>
 
+    <div class="notifications-workspace workspace-view collapsed" id="notificationsView">
+      <div class="workspace-head">
+        <div class="workspace-title">Notifications</div>
+        <div class="workspace-subtitle">Forum activity, direct messages, and price alerts in one place.</div>
+      </div>
+      <div class="notifications-body">
+        <section class="notifications-panel">
+          <div class="notifications-toolbar">
+            <div class="notifications-toolbar-title">Activity</div>
+            <div class="notifications-toolbar-actions">
+              <button class="notif-action" type="button" onclick="checkNotificationsNow()">CHECK NOW</button>
+              <button class="notif-action" type="button" onclick="requestBrowserNotifications()">BROWSER</button>
+              <button class="notif-action" type="button" onclick="markNotificationsRead()">MARK READ</button>
+            </div>
+          </div>
+          <div class="notif-list" id="notificationList">
+            <div class="notif-empty">Login to view notifications.</div>
+          </div>
+        </section>
+        <aside class="notifications-panel">
+          <div class="notifications-toolbar">
+            <div class="notifications-toolbar-title">Price Alerts</div>
+          </div>
+          <div class="notif-settings" id="notificationSettings"></div>
+          <div class="notifications-help">Market checks use backend fallbacks: Binance, Binance.US, Coinbase, then CoinGecko.</div>
+        </aside>
+      </div>
+    </div>
+
     <div class="messages-col collapsed" id="messagesCol">
       <div class="messages-header">
         <span class="messages-title">MESSENGER</span>
@@ -2317,6 +2587,7 @@ const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...
 const LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
 const MESSAGE_TAB_POLL_MS = 5000;
 const NOTIFICATION_POLL_MS = 15000;
+const CHAT_ATTACHMENT_LIMIT = 5;
 
 const COINGECKO_MAP = {
   bitcoin:       'BTC',
@@ -2378,6 +2649,7 @@ let portfolioState = { holdings: [], snapshots: [], summary: null, draft: [], er
 let portfolioRange = localStorage.getItem('cryptoAgentPortfolioRange') || 'all';
 let recommendationChipsDismissed = false;
 let agentGreetingText = '';
+let chatAttachments = [];
 let mainTab = 'agent';
 let activeMarketSymbol = 'BTC';
 let authSessionVersion = 0;
@@ -2396,7 +2668,7 @@ let authState = {
   logoutUrl: AUTH_LOGOUT,
 };
 let accessToken = null;
-let notes = []; // Persisted locally
+let notes = [];
 
 const ROOT_VIEWPORT_PADDING = 24;
 
@@ -2428,13 +2700,14 @@ function toggleTheme() {
 }
 
 function setMainTab(tab) {
-  if (!['agent', 'portfolio', 'messages', 'friends', 'notes'].includes(tab)) tab = 'agent';
+  if (!['agent', 'portfolio', 'messages', 'notifications', 'friends', 'notes'].includes(tab)) tab = 'agent';
   mainTab = tab;
 
   const viewMap = {
     agent: 'agentView',
     portfolio: 'portfolioView',
     messages: 'messagesCol',
+    notifications: 'notificationsView',
     friends: 'friendsView',
     notes: 'nbCol',
   };
@@ -2446,6 +2719,7 @@ function setMainTab(tab) {
     agent: 'mainTabAgent',
     portfolio: 'mainTabPortfolio',
     messages: 'mainTabMessages',
+    notifications: 'mainTabNotifications',
     friends: 'mainTabFriends',
     notes: 'mainTabNotes',
   };
@@ -2457,6 +2731,7 @@ function setMainTab(tab) {
   if (tab === 'messages') loadMessageTab();
   else closeMessageTabSocket();
   if (tab === 'portfolio') loadPortfolio();
+  if (tab === 'notifications') loadNotifications(false);
   if (tab === 'friends') loadFriends();
   if (tab === 'notes') loadNotes();
   syncRootWidth();
@@ -2697,26 +2972,37 @@ function fmtNotificationTime(epoch) {
 }
 
 function renderNotifications() {
-  const count = document.getElementById('notifCount');
-  const list = document.getElementById('notifList');
-  const settings = document.getElementById('notifSettings');
-  if (!count || !list || !settings) return;
-
   const unread = notificationState.unreadCount || 0;
-  count.textContent = unread > 9 ? '9+' : String(unread);
-  count.classList.toggle('visible', unread > 0);
+  ['notifCount', 'notificationUnreadCount'].forEach(id => {
+    const count = document.getElementById(id);
+    if (!count) return;
+    count.textContent = unread > 9 ? '9+' : String(unread);
+    count.classList.toggle('visible', unread > 0);
+  });
+
+  const lists = ['notifList', 'notificationList']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+  const settingsTargets = ['notifSettings', 'notificationSettings']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
 
   if (!authState.authenticated) {
-    list.innerHTML = '<div class="notif-empty">Login to view notifications.</div>';
-    settings.innerHTML = '';
+    lists.forEach(list => {
+      list.innerHTML = '<div class="notif-empty">Login to view notifications.</div>';
+    });
+    settingsTargets.forEach(settings => {
+      settings.innerHTML = '';
+    });
     return;
   }
 
   const events = notificationState.events || [];
+  let listHtml = '';
   if (!events.length) {
-    list.innerHTML = '<div class="notif-empty">No notifications yet. Price alerts, direct messages, and forum activity will appear here.</div>';
+    listHtml = '<div class="notif-empty">No notifications yet. Price alerts, direct messages, and forum activity will appear here.</div>';
   } else {
-    list.innerHTML = events.map(event => `
+    listHtml = events.map(event => `
       <div class="notif-item ${event.readAt ? '' : 'unread'}" ${event.linkUrl ? `onclick="window.location.href='${escapeJS(event.linkUrl)}'" style="cursor:pointer"` : ''}>
         <div class="notif-item-title">${escape(event.title)}</div>
         <div class="notif-item-msg">${escape(event.message)}</div>
@@ -2724,13 +3010,19 @@ function renderNotifications() {
       </div>
     `).join('');
   }
+  lists.forEach(list => {
+    list.innerHTML = listHtml;
+  });
 
-  settings.innerHTML = (notificationState.settings || []).map(setting => `
+  const settingsHtml = (notificationState.settings || []).map(setting => `
     <label class="notif-setting">
       <span>${escape(setting.symbol)} +/- ${Number(setting.thresholdPercent).toFixed(1)}% in 24h</span>
-      <input type="checkbox" ${setting.enabled ? 'checked' : ''} onchange="updateNotificationSetting('${setting.id}', this.checked)" />
+      <input type="checkbox" ${setting.enabled ? 'checked' : ''} onchange="updateNotificationSetting('${escapeJS(String(setting.id))}', this.checked)" />
     </label>
   `).join('');
+  settingsTargets.forEach(settings => {
+    settings.innerHTML = settingsHtml || '<div class="notif-empty">No price alert settings available.</div>';
+  });
 }
 
 function friendItem(user, actionHtml = '', meta = '') {
@@ -3524,10 +3816,7 @@ function stopNotificationPolling() {
 }
 
 function toggleNotifications() {
-  const panel = document.getElementById('notifPanel');
-  if (!panel) return;
-  panel.classList.toggle('open');
-  if (panel.classList.contains('open') && authState.authenticated) loadNotifications(false);
+  setMainTab(mainTab === 'notifications' ? 'agent' : 'notifications');
 }
 
 async function markNotificationsRead() {
@@ -4075,37 +4364,29 @@ async function deletePortfolioHolding(symbol) {
   }
 }
 
-function legacySeedNotes() {
-  notes = [];
-  renderNotes();
-  return;
-  const saved = null;
-  if (saved) {
-    try {
-      notes = JSON.parse(saved);
-    } catch (e) {
-      notes = [];
-    }
-  } else {
-    // Default system seed notes
-    notes = [
-      {
-        id: '1',
-        content: "This month's DCA strategy: prioritize accumulating ETH around strong support levels. Avoid using margin at this time.",
-        time: "10:14:00"
-      }
-    ];
-  }
-  renderNotes();
+// Authenticated per-user notebook storage
+function formatNoteTime(epochSeconds) {
+  const value = Number(epochSeconds || 0);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  return new Date(value * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function saveNotesToStorage() {
-  renderNotes();
+function normalizeNote(note) {
+  return {
+    id: String(note?.id || ''),
+    content: String(note?.content || ''),
+    createdAt: Number(note?.createdAt || 0),
+  };
 }
 
 function renderNotes() {
   const container = document.getElementById('nbList');
   if (!container) return;
+
+  if (!authState.authenticated) {
+    container.innerHTML = `<div class="nb-empty">LOGIN REQUIRED<br><br><span style="font-size: 9px; color: #2e3444">Sign in to save private notes for the agent.</span></div>`;
+    return;
+  }
 
   if (notes.length === 0) {
     container.innerHTML = `<div class="nb-empty">NOTEBOOK EMPTY<br><br><span style="font-size: 9px; color: #2e3444">Save important info from the AI or type your notes here.</span></div>`;
@@ -4116,70 +4397,17 @@ function renderNotes() {
     <div class="nb-item">
       <div class="nb-item-content">${escape(n.content)}</div>
       <div class="nb-item-meta">
-        <span>${n.time}</span>
+        <span>${formatNoteTime(n.createdAt)}</span>
         <div class="nb-item-tools">
           <button class="nb-item-action" onclick="askAboutNote('${escapeJS(n.content)}')">Ask AI</button>
           <button class="nb-item-action" onclick="copyNote('${escapeJS(n.content)}')">Copy</button>
-          <button class="nb-item-action del" onclick="deleteNote('${n.id}')">Delete</button>
+          <button class="nb-item-action del" onclick="deleteNote('${escapeJS(n.id)}')">Delete</button>
         </div>
       </div>
     </div>
   `).join('');
 }
 
-// Add note manually
-function saveManualNote() {
-  const textarea = document.getElementById('nbText');
-  const text = textarea.value.trim();
-  if (!text) return;
-
-  const newNote = {
-    id: Date.now().toString(),
-    content: text,
-    time: new Date().toTimeString().slice(0, 8)
-  };
-
-  notes.unshift(newNote);
-  saveNotesToStorage();
-  
-  textarea.value = '';
-  showToast('Saved to notebook');
-}
-
-// Quick-add note extracted from AI message
-function saveNoteFromAI(text) {
-  const newNote = {
-    id: Date.now().toString(),
-    content: text,
-    time: new Date().toTimeString().slice(0, 8)
-  };
-
-  notes.unshift(newNote);
-  saveNotesToStorage();
-
-  // Auto-expand notebook if collapsed
-  const col = document.getElementById('nbCol');
-  if (col.classList.contains('collapsed')) {
-    toggleNotebook();
-  }
-  showToast('Saved AI analysis to notebook');
-}
-
-function deleteNote(id) {
-  notes = notes.filter(n => n.id !== id);
-  saveNotesToStorage();
-  showToast('Note deleted');
-}
-
-function clearAllNotes() {
-  if (confirm('Are you sure you want to clear your personal notebook?')) {
-    notes = [];
-    saveNotesToStorage();
-    showToast('Notebook cleared');
-  }
-}
-
-// Authenticated per-user notebook storage
 async function loadNotes() {
   if (!authState.authenticated) {
     notes = [];
@@ -4191,7 +4419,7 @@ async function loadNotes() {
     const res = await authFetch(API_NOTES);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not load notes');
-    notes = data.notes || [];
+    notes = (data.notes || []).map(normalizeNote).filter(note => note.id && note.content);
   } catch (e) {
     notes = [];
     showToast(e.message || 'Could not load notes');
@@ -4216,7 +4444,7 @@ async function saveManualNote() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not save note');
-    notes.unshift(data.note);
+    notes.unshift(normalizeNote(data.note));
     renderNotes();
     loadRecommendations();
     textarea.value = '';
@@ -4240,7 +4468,7 @@ async function saveNoteFromAI(text) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Could not save note');
-    notes.unshift(data.note);
+    notes.unshift(normalizeNote(data.note));
     renderNotes();
     loadRecommendations();
   } catch (e) {
@@ -4249,13 +4477,17 @@ async function saveNoteFromAI(text) {
   }
 
   const col = document.getElementById('nbCol');
-  if (col.classList.contains('collapsed')) {
+  if (col?.classList.contains('collapsed')) {
     toggleNotebook();
   }
   showToast('Saved AI analysis to notebook');
 }
 
 async function deleteNote(id) {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
   try {
     const res = await authFetch(`${API_NOTES}/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -4272,6 +4504,10 @@ async function deleteNote(id) {
 }
 
 async function clearAllNotes() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
   if (!confirm('Are you sure you want to clear your personal notebook?')) return;
   try {
     const res = await authFetch(API_NOTES, { method: 'DELETE' });
@@ -4386,7 +4622,7 @@ function applyInitialPage() {
     setMainTab('friends');
     return;
   }
-  if (['agent', 'portfolio', 'messages', 'notes'].includes(page)) {
+  if (['agent', 'portfolio', 'messages', 'notifications', 'notes'].includes(page)) {
     setMainTab(page);
     return;
   }
@@ -4506,10 +4742,14 @@ async function loadAuthState() {
 function syncChatControls() {
   const inp = document.getElementById('inp');
   const sbtn = document.getElementById('sbtn');
+  const attachBtn = document.getElementById('attachBtn');
+  const fileInput = document.getElementById('chatFileInput');
   if (!inp || !sbtn) return;
 
   inp.disabled = !authState.authenticated;
   sbtn.disabled = busy || !authState.authenticated;
+  if (attachBtn) attachBtn.disabled = busy || !authState.authenticated;
+  if (fileInput) fileInput.disabled = busy || !authState.authenticated;
   renderChatMode();
 
   if (authState.authenticated) {
@@ -4613,6 +4853,10 @@ function switchAccount() {
   window.location.href = authState.loginUrl || AUTH_LOGIN;
 }
 
+function redirectToLogin() {
+  window.location.replace(authState.loginUrl || AUTH_LOGIN);
+}
+
 async function handleAuthClick() {
   if (!authState.authenticated) {
     window.location.href = authState.loginUrl || AUTH_LOGIN;
@@ -4629,6 +4873,7 @@ async function handleAuthClick() {
     authState.authenticated = false;
     authState.user = null;
     notes = [];
+    chatAttachments = [];
     notificationState = { events: [], settings: [], unreadCount: 0 };
     friendState = { friends: [], sent: [], received: [], searchResults: [] };
     directChatState = { conversation: null, messages: [] };
@@ -4643,13 +4888,14 @@ async function handleAuthClick() {
     closeAccountMenu();
     closeToolPanels();
     renderAuthState();
+    renderChatAttachments();
     renderNotes();
     renderNotifications();
     renderFriends();
     renderMessageTab();
     renderRecommendations();
     renderPortfolio();
-    showToast('Logged out');
+    redirectToLogin();
   }
 }
 
@@ -4715,6 +4961,104 @@ function fmt(t) {
   }).join('<br>');
 }
 
+function stripAssistantDecorations(text) {
+  return String(text ?? '')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
+
+function thinkingSeconds(panel) {
+  const startedAt = Number(panel?.dataset.startedAt || Date.now());
+  return Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+}
+
+function thinkingTitle(mode, done, seconds) {
+  const label = done ? 'Thought' : (mode === 'reasoning' ? 'Reasoning' : 'Thinking');
+  return `${label} for ${seconds} second${seconds === 1 ? '' : 's'}`;
+}
+
+function thinkingStepsHtml(mode, phase, done) {
+  const modeStep = mode === 'reasoning'
+    ? 'Using the deeper reasoning mode for assumptions, evidence, and tradeoffs.'
+    : 'Using the instant mode for a concise answer.';
+  const finalStep = done
+    ? 'Prepared the final answer.'
+    : phase === 'writing'
+      ? 'Writing the answer.'
+      : 'Checking whether notes, uploads, or market tools are needed.';
+  return `
+    <ul>
+      <li>Read the question and selected context.</li>
+      <li>${modeStep}</li>
+      <li>${finalStep}</li>
+    </ul>
+  `;
+}
+
+function updateThinkingPanel(panel, options = {}) {
+  if (!panel) return;
+  if (options.phase) panel.dataset.phase = options.phase;
+  if (options.done) panel.dataset.done = 'true';
+  const mode = panel.dataset.mode || 'instant';
+  const done = panel.dataset.done === 'true';
+  const seconds = thinkingSeconds(panel);
+  const title = panel.querySelector('.thinking-title');
+  const body = panel.querySelector('.thinking-body');
+  if (title) title.textContent = thinkingTitle(mode, done, seconds);
+  if (body) body.innerHTML = thinkingStepsHtml(mode, panel.dataset.phase || 'thinking', done);
+}
+
+function toggleThinkingPanel(button) {
+  button.closest('.thinking-panel')?.classList.toggle('collapsed');
+}
+
+function attachThinkingPanel(messageEl, mode) {
+  const body = messageEl?.querySelector('.msg-body');
+  if (!body) return null;
+  const panel = document.createElement('div');
+  panel.className = 'thinking-panel';
+  panel.dataset.mode = mode || 'instant';
+  panel.dataset.phase = 'thinking';
+  panel.dataset.startedAt = String(Date.now());
+  panel.innerHTML = `
+    <button class="thinking-head" type="button" onclick="toggleThinkingPanel(this)">
+      <span class="thinking-title"></span>
+      <span class="thinking-caret">v</span>
+    </button>
+    <div class="thinking-body"></div>
+  `;
+  body.insertBefore(panel, body.querySelector('.bbl'));
+  updateThinkingPanel(panel);
+  panel._timer = setInterval(() => updateThinkingPanel(panel), 1000);
+  return panel;
+}
+
+function completeThinkingPanel(messageEl) {
+  const panel = messageEl?.querySelector('.thinking-panel');
+  if (!panel) return;
+  if (panel._timer) clearInterval(panel._timer);
+  updateThinkingPanel(panel, { done: true, phase: 'done' });
+}
+
+function failThinkingPanel(messageEl) {
+  const panel = messageEl?.querySelector('.thinking-panel');
+  if (!panel) return;
+  if (panel._timer) clearInterval(panel._timer);
+  panel.dataset.done = 'true';
+  const title = panel.querySelector('.thinking-title');
+  const body = panel.querySelector('.thinking-body');
+  if (title) title.textContent = thinkingTitle(panel.dataset.mode || 'instant', true, thinkingSeconds(panel));
+  if (body) body.innerHTML = '<ul><li>The request stopped before a final answer was completed.</li></ul>';
+}
+
+function clearThinkingTimers(root = document) {
+  root.querySelectorAll?.('.thinking-panel').forEach(panel => {
+    if (panel._timer) clearInterval(panel._timer);
+  });
+}
+
 function chatAvatarHtml(isUser) {
   if (isUser) {
     const user = authState.user || {};
@@ -4723,7 +5067,7 @@ function chatAvatarHtml(isUser) {
     }
     return `<div class="msg-avatar msg-avatar-user">${escape(userInitial(user))}</div>`;
   }
-  return '<div class="msg-avatar msg-avatar-agent">AI</div>';
+  return '';
 }
 
 function assistantActionHtml(rawText) {
@@ -4800,26 +5144,9 @@ function updateAgentHeader() {
     : 'Personalized from your profile, notes, and chat history';
 }
 
-function initialAgentMessageHtml(message = '') {
-  const content = message || agentGreetingText || fallbackAgentGreeting();
-  return `
-    <div class="msg msg-a">
-      ${chatAvatarHtml(false)}
-      <div class="msg-body">
-        <div class="lbl">CRYPTO AGENT</div>
-        <div class="bbl bbl-a">${fmt(content)}</div>
-      </div>
-    </div>
-  `;
-}
-
 function setAgentGreeting(message) {
   agentGreetingText = message || fallbackAgentGreeting();
   updateAgentHeader();
-  const messages = document.getElementById('msgs');
-  if (messages && !hist.length && !busy) {
-    messages.innerHTML = initialAgentMessageHtml(agentGreetingText);
-  }
 }
 
 async function loadAgentGreeting() {
@@ -4841,10 +5168,13 @@ function resetAgentChat() {
   hist = [];
   busy = false;
   recommendationChipsDismissed = false;
+  chatAttachments = [];
   const input = document.getElementById('inp');
   if (input) input.value = '';
+  renderChatAttachments();
   const messages = document.getElementById('msgs');
-  if (messages) messages.innerHTML = initialAgentMessageHtml();
+  clearThinkingTimers(messages);
+  if (messages) messages.innerHTML = '';
   updateAgentHeader();
   renderRecommendations();
   syncChatControls();
@@ -4888,12 +5218,82 @@ function hideRecommendationChipsForSession() {
   renderRecommendations();
 }
 
+function formatAttachmentSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderChatAttachments() {
+  const root = document.getElementById('chatAttachments');
+  if (!root) return;
+  root.innerHTML = chatAttachments.map((file, index) => `
+    <span class="attachment-chip" title="${escapeAttr(file.name)}">
+      <span class="attachment-chip-name">${escape(file.name)}</span>
+      <span>${formatAttachmentSize(file.size)}</span>
+      <button class="attachment-chip-remove" type="button" aria-label="Remove ${escapeAttr(file.name)}" onclick="removeChatAttachment(${index})">x</button>
+    </span>
+  `).join('');
+}
+
+function openChatFilePicker() {
+  if (!authState.authenticated) {
+    showToast('Login required');
+    return;
+  }
+  if (busy) return;
+  document.getElementById('chatFileInput')?.click();
+}
+
+function handleChatFilesSelected(event) {
+  const selected = Array.from(event.target.files || []);
+  if (!selected.length) return;
+  const available = Math.max(0, CHAT_ATTACHMENT_LIMIT - chatAttachments.length);
+  if (available <= 0) {
+    showToast(`Maximum ${CHAT_ATTACHMENT_LIMIT} files per message`);
+  } else {
+    chatAttachments = chatAttachments.concat(selected.slice(0, available));
+    if (selected.length > available) showToast(`Only ${CHAT_ATTACHMENT_LIMIT} files can be sent at once`);
+  }
+  event.target.value = '';
+  renderChatAttachments();
+}
+
+function removeChatAttachment(index) {
+  chatAttachments.splice(index, 1);
+  renderChatAttachments();
+}
+
+function chatDisplayText(text, attachments) {
+  if (text) return text;
+  const names = attachments.map(file => file.name).filter(Boolean).join(', ');
+  return names ? `Analyze uploaded files: ${names}` : '';
+}
+
+function chatRequestOptions(text, attachments) {
+  if (attachments.length) {
+    const body = new FormData();
+    body.append('message', text);
+    body.append('mode', chatMode);
+    attachments.forEach(file => body.append('attachments', file, file.name));
+    return { method: 'POST', body };
+  }
+  return {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text, mode: chatMode }),
+  };
+}
+
 function addMsg(role, rawText, isHtml = false) {
   const isUser = role === 'user';
   const el = document.createElement('div');
   el.className = 'msg ' + (isUser ? 'msg-u' : 'msg-a');
-  const contentHtml = isHtml ? rawText : fmt(rawText);
-  const actionHtml = (!isUser && !isHtml) ? assistantActionHtml(rawText) : '';
+  const cleanText = isUser || isHtml ? rawText : stripAssistantDecorations(rawText);
+  const contentHtml = isHtml ? rawText : fmt(cleanText);
+  const actionHtml = (!isUser && !isHtml) ? assistantActionHtml(cleanText) : '';
 
   el.innerHTML = `
     ${chatAvatarHtml(isUser)}
@@ -4909,15 +5309,11 @@ function addMsg(role, rawText, isHtml = false) {
   return el;
 }
 
-async function fetchAgentReplyFallback(txt) {
-  const res = await authFetch(API_CHAT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: txt, mode: chatMode }),
-  });
+async function fetchAgentReplyFallback(txt, attachments = []) {
+  const res = await authFetch(API_CHAT, chatRequestOptions(txt, attachments));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Chat request failed');
-  return data.reply || 'No response received.';
+  return stripAssistantDecorations(data.reply || 'No response received.');
 }
 
 function parseSseBlock(block) {
@@ -4930,13 +5326,9 @@ function parseSseBlock(block) {
   return JSON.parse(data);
 }
 
-async function streamAgentReply(txt, messageEl) {
+async function streamAgentReply(txt, messageEl, attachments = []) {
   const bubble = messageEl.querySelector('.bbl');
-  const res = await authFetch(API_CHAT_STREAM, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: txt, mode: chatMode }),
-  });
+  const res = await authFetch(API_CHAT_STREAM, chatRequestOptions(txt, attachments));
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -4944,21 +5336,27 @@ async function streamAgentReply(txt, messageEl) {
   }
 
   if (!res.body) {
-    const reply = await fetchAgentReplyFallback(txt);
-    bubble.innerHTML = fmt(reply);
-    return reply;
+    const reply = await fetchAgentReplyFallback(txt, attachments);
+    const cleanReply = stripAssistantDecorations(reply);
+    bubble.innerHTML = fmt(cleanReply);
+    return cleanReply;
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let reply = '';
+  let wroteFirstToken = false;
 
   async function handlePayload(payload) {
     if (!payload) return false;
     if (payload.type === 'token') {
+      if (!wroteFirstToken) {
+        updateThinkingPanel(messageEl.querySelector('.thinking-panel'), { phase: 'writing' });
+        wroteFirstToken = true;
+      }
       reply += payload.content || '';
-      bubble.innerHTML = fmt(reply);
+      bubble.innerHTML = fmt(stripAssistantDecorations(reply));
       document.getElementById('msgs').scrollTop = 9999;
       return false;
     }
@@ -4984,7 +5382,7 @@ async function streamAgentReply(txt, messageEl) {
   if (buffer.trim()) {
     await handlePayload(parseSseBlock(buffer));
   }
-  return reply || 'No response received.';
+  return stripAssistantDecorations(reply || 'No response received.');
 }
 
 async function send() {
@@ -4995,22 +5393,28 @@ async function send() {
   }
   const el = document.getElementById('inp');
   const txt = el.value.trim();
-  if (!txt) return;
+  const attachments = chatAttachments.slice();
+  if (!txt && !attachments.length) return;
   el.value = '';
+  chatAttachments = [];
+  renderChatAttachments();
   const requestSessionVersion = authSessionVersion;
   hideRecommendationChipsForSession();
+  const displayText = chatDisplayText(txt, attachments);
 
-  hist.push({ role: 'user', content: txt });
-  addMsg('user', txt);
+  hist.push({ role: 'user', content: displayText });
+  addMsg('user', displayText);
 
   busy = true;
   syncChatControls();
 
   const loader = addMsg('assistant',
     '<span class="dots"><span>.</span><span>.</span><span>.</span></span>', true);
+  attachThinkingPanel(loader, chatMode);
 
   try {
-    const reply = await streamAgentReply(txt, loader);
+    const reply = await streamAgentReply(txt, loader, attachments);
+    completeThinkingPanel(loader);
     if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
       loader.remove();
       return;
@@ -5022,6 +5426,7 @@ async function send() {
     }
     loadRecommendations();
   } catch (e) {
+    failThinkingPanel(loader);
     if (requestSessionVersion !== authSessionVersion || !authState.authenticated) {
       loader.remove();
       return;

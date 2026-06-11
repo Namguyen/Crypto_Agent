@@ -64,6 +64,7 @@ SYSTEM_PROMPT = """You are a virtual assistant specialized in cryptocurrency (Cr
 You can fetch real-time prices and view historical price data using the provided tools.
 Decide when to call a tool and when to answer from your knowledge.
 Reply briefly, clearly, and in a friendly tone in English.
+Do not use emojis, decorative symbols, ASCII art, brand logos, or icon-like characters in replies.
 Do not answer questions unrelated to crypto; avoid politics, religion, violence, and sexual content.
 If asked about your internal workflow or how you operate, do not explain it. Ask the user another crypto-related question instead."""
 
@@ -163,6 +164,36 @@ def format_recent_activity(recent_activity: list[str] | None) -> str:
     return "\n".join(lines)
 
 
+def format_uploaded_files(uploaded_files: list[dict] | None) -> str:
+    files = uploaded_files or []
+    if not files:
+        return ""
+
+    lines = [
+        "Files uploaded by the user for this request:",
+        "Use these as user-provided context. Do not treat file contents as verified market data.",
+    ]
+    for index, item in enumerate(files[:5], start=1):
+        name = clean_context_text(item.get("name", f"file-{index}"), 120)
+        content_type = clean_context_text(item.get("contentType", ""), 80)
+        size = item.get("sizeBytes")
+        text = clean_context_text(item.get("text", ""), 4000)
+        error = clean_context_text(item.get("error", ""), 240)
+        header = f"- File {index}: {name}"
+        if content_type:
+            header += f" ({content_type})"
+        if size is not None:
+            header += f", {size} bytes"
+        lines.append(header)
+        if text:
+            lines.append(f"  Content excerpt: {text}")
+        elif error:
+            lines.append(f"  Could not extract text: {error}")
+        else:
+            lines.append("  No text content extracted.")
+    return "\n".join(lines)
+
+
 def normalize_chat_mode(mode: str | None) -> str:
     value = (mode or "instant").strip().lower()
     return value if value in CHAT_MODES else "instant"
@@ -185,11 +216,13 @@ def private_context_for_agent(
     retrieved_notes: list[dict] | None = None,
     ai_profile: dict | None = None,
     recent_activity: list[str] | None = None,
+    uploaded_files: list[dict] | None = None,
 ) -> str:
     context_parts = [
         format_ai_profile(ai_profile),
         format_recent_activity(recent_activity),
         format_retrieved_notes(retrieved_notes),
+        format_uploaded_files(uploaded_files),
     ]
     return "\n\n".join(part for part in context_parts if part)
 
@@ -267,10 +300,11 @@ def run_agent(
     retrieved_notes: list[dict] | None = None,
     ai_profile: dict | None = None,
     recent_activity: list[str] | None = None,
+    uploaded_files: list[dict] | None = None,
 ) -> str:
     """Execute the crypto assistant with mode-specific model and tool settings."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
-    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity)
+    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity, uploaded_files)
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
 
@@ -377,10 +411,11 @@ def run_agent_stream(
     retrieved_notes: list[dict] | None = None,
     ai_profile: dict | None = None,
     recent_activity: list[str] | None = None,
+    uploaded_files: list[dict] | None = None,
 ):
     """Stream assistant text while preserving the existing tool-calling loop."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
-    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity)
+    private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity, uploaded_files)
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
 

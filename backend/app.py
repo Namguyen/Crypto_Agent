@@ -80,6 +80,22 @@ dotenv.load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT") or (PROJECT_ROOT / "uploads")).resolve()
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+CHAT_UPLOAD_MAX_FILES = int(os.getenv("CHAT_UPLOAD_MAX_FILES", "5"))
+CHAT_UPLOAD_MAX_BYTES = int(os.getenv("CHAT_UPLOAD_MAX_BYTES", str(300 * 1024)))
+CHAT_UPLOAD_TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".log",
+    ".py",
+    ".js",
+    ".ts",
+    ".html",
+    ".css",
+}
 
 app = FastAPI(title="Crypto Agent")
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "frontend" / "templates"))
@@ -166,6 +182,68 @@ def registration_is_enabled() -> bool:
 
 def json_error(message: str, status: int) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
+
+
+def is_text_upload(filename: str, content_type: str) -> bool:
+    suffix = Path(filename or "").suffix.lower()
+    normalized_type = (content_type or "").split(";", 1)[0].strip().lower()
+    return normalized_type.startswith("text/") or normalized_type in {
+        "application/json",
+        "application/x-ndjson",
+        "application/yaml",
+        "application/xml",
+    } or suffix in CHAT_UPLOAD_TEXT_EXTENSIONS
+
+
+async def extract_uploaded_file_context(file_obj) -> dict:
+    filename = Path(getattr(file_obj, "filename", "") or "uploaded-file").name
+    content_type = getattr(file_obj, "content_type", "") or ""
+    try:
+        raw = await file_obj.read(CHAT_UPLOAD_MAX_BYTES + 1)
+    finally:
+        close = getattr(file_obj, "close", None)
+        if close:
+            await close()
+
+    size = len(raw)
+    item = {
+        "name": filename,
+        "contentType": content_type,
+        "sizeBytes": size,
+        "text": "",
+        "error": "",
+    }
+    if size > CHAT_UPLOAD_MAX_BYTES:
+        item["error"] = f"File is larger than {CHAT_UPLOAD_MAX_BYTES} bytes"
+        return item
+    if not is_text_upload(filename, content_type):
+        item["error"] = "Only text-like files are readable by the agent right now"
+        return item
+    try:
+        item["text"] = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        item["text"] = raw.decode("utf-8", errors="replace")
+    return item
+
+
+async def chat_request_payload(request: Request) -> tuple[str, str, list[dict]]:
+    content_type = request.headers.get("content-type", "").lower()
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        user_input = (form.get("message") or "").strip()
+        raw_mode = (form.get("mode") or "instant").strip().lower()
+        files = [
+            item
+            for item in form.getlist("attachments")
+            if getattr(item, "filename", "")
+        ][:CHAT_UPLOAD_MAX_FILES]
+        uploaded_files = [await extract_uploaded_file_context(file_obj) for file_obj in files]
+        if not user_input and uploaded_files:
+            user_input = "Analyze the uploaded file(s)."
+        return user_input, raw_mode, uploaded_files
+
+    data = await request.json()
+    return (data.get("message", "").strip(), (data.get("mode") or "instant").strip().lower(), [])
 
 
 def hash_token(token: str) -> str:
@@ -1569,9 +1647,7 @@ def agent_greeting(user=Depends(require_user)):
 async def chat(request: Request, user=Depends(require_user)):
     if isinstance(user, JSONResponse):
         return user
-    data = await request.json()
-    user_input = data.get("message", "").strip()
-    raw_mode = (data.get("mode") or "instant").strip().lower()
+    user_input, raw_mode, uploaded_files = await chat_request_payload(request)
 
     if raw_mode not in CHAT_MODES:
         return json_error("Invalid chat mode", 400)
@@ -1599,6 +1675,7 @@ async def chat(request: Request, user=Depends(require_user)):
             retrieved_notes=retrieved_notes,
             ai_profile=ai_profile,
             recent_activity=recent_activity,
+            uploaded_files=uploaded_files,
         )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
@@ -1613,9 +1690,7 @@ async def chat(request: Request, user=Depends(require_user)):
 async def chat_stream(request: Request, user=Depends(require_user)):
     if isinstance(user, JSONResponse):
         return user
-    data = await request.json()
-    user_input = data.get("message", "").strip()
-    raw_mode = (data.get("mode") or "instant").strip().lower()
+    user_input, raw_mode, uploaded_files = await chat_request_payload(request)
 
     if raw_mode not in CHAT_MODES:
         return json_error("Invalid chat mode", 400)
@@ -1655,6 +1730,7 @@ async def chat_stream(request: Request, user=Depends(require_user)):
                 retrieved_notes=retrieved_notes,
                 ai_profile=ai_profile,
                 recent_activity=recent_activity,
+                uploaded_files=uploaded_files,
             ):
                 reply_parts.append(token)
                 yield sse({"type": "token", "content": token})
