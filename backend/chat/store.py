@@ -142,6 +142,8 @@ def list_conversations(user_id: int | str, conversation_id: int | str | None = N
                 c.*,
                 other_user.id AS other_user_id,
                 other_user.username AS other_username,
+                other_user.display_name AS other_display_name,
+                other_user.picture AS other_picture,
                 last_msg.id AS last_message_id,
                 last_msg.content AS last_message_content,
                 last_msg.sender_id AS last_message_sender_id,
@@ -274,6 +276,8 @@ def public_conversation(row: sqlite3.Row | dict, current_user_id: int | str) -> 
             {
                 "id": row["other_user_id"],
                 "username": row["other_username"],
+                "display_name": row["other_display_name"] if "other_display_name" in row.keys() else "",
+                "picture": row["other_picture"] if "other_picture" in row.keys() else "",
             }
         ),
         "lastMessage": last_message,

@@ -22,7 +22,9 @@ except Exception:  # pragma: no cover - helpful error when dependency missing
 from backend.ai.agent import CHAT_MODES, chat_mode_options, normalize_chat_mode, run_agent, run_agent_stream
 from backend.ai.retrieval import index_note_for_user, retrieve_user_notes
 from backend.auth.store import (
+    active_refresh_sessions,
     cleanup_expired_refresh_tokens,
+    create_general_notification_event,
     create_note,
     create_user,
     delete_user_by_id,
@@ -49,6 +51,7 @@ from backend.auth.store import (
     revoke_refresh_tokens_for_user,
     store_refresh_token,
     suspend_user,
+    touch_refresh_token,
     unread_notification_count,
     unsuspend_user,
     update_notification_setting,
@@ -80,6 +83,8 @@ dotenv.load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT") or (PROJECT_ROOT / "uploads")).resolve()
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+FRONTEND_STATIC_ROOT = (PROJECT_ROOT / "frontend" / "static").resolve()
+FRONTEND_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 CHAT_UPLOAD_MAX_FILES = int(os.getenv("CHAT_UPLOAD_MAX_FILES", "5"))
 CHAT_UPLOAD_MAX_BYTES = int(os.getenv("CHAT_UPLOAD_MAX_BYTES", str(300 * 1024)))
 CHAT_UPLOAD_TEXT_EXTENSIONS = {
@@ -100,6 +105,7 @@ CHAT_UPLOAD_TEXT_EXTENSIONS = {
 app = FastAPI(title="Crypto Agent")
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "frontend" / "templates"))
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
+app.mount("/static", StaticFiles(directory=str(FRONTEND_STATIC_ROOT)), name="static")
 app.include_router(users_router)
 app.include_router(social_router)
 app.include_router(chat_router)
@@ -132,6 +138,7 @@ DEV_RELOAD_PATHS = [
     PROJECT_ROOT / "backend",
     PROJECT_ROOT / "frontend" / "templates",
 ]
+AUTH_ACTIVE_SESSION_SECONDS = int(os.getenv("AUTH_ACTIVE_SESSION_SECONDS", str(30 * 60)))
 dev_reload_cache = {"checked_at": 0.0, "version": "0"}
 market_price_cache = {"checked_at": 0.0, "prices": []}
 MARKET_PRICE_CACHE_TTL_SECONDS = 25
@@ -355,15 +362,87 @@ def create_refresh_token_record(user: dict, request: Request) -> tuple[str, str]
     return refresh_token, jti
 
 
-def issue_auth_response(user: dict, request: Request, status_code: int = 200) -> JSONResponse:
+def current_refresh_jti(request: Request, expected_user_id: str | int | None = None) -> str:
+    refresh_token = request.cookies.get(REFRESH_COOKIE_NAME, "")
+    if not refresh_token:
+        return ""
+    try:
+        payload = decode_refresh_token(refresh_token)
+    except jwt.InvalidTokenError:
+        return ""
+    if expected_user_id is not None and str(payload.get("sub")) != str(expected_user_id):
+        return ""
+
+    token_hash = hash_token(refresh_token)
+    record = get_refresh_token(token_hash, payload["jti"])
+    if (
+        not record
+        or record["revoked_at"]
+        or int(record["expires_at"]) < int(time.time())
+    ):
+        return ""
+    touch_refresh_token(token_hash, payload["jti"])
+    return str(payload["jti"])
+
+
+def auth_security_payload(user_id: str | int, current_jti: str = "") -> dict:
+    other_sessions = active_refresh_sessions(
+        user_id,
+        exclude_jti=current_jti,
+        active_window_seconds=AUTH_ACTIVE_SESSION_SECONDS,
+        limit=5,
+    )
+    return {
+        "hasOtherActiveSessions": bool(other_sessions),
+        "otherActiveSessionCount": len(other_sessions),
+        "latestOtherSession": other_sessions[0] if other_sessions else None,
+        "activeWindowSeconds": AUTH_ACTIVE_SESSION_SECONDS,
+    }
+
+
+def login_client_label(request: Request) -> str:
+    user_agent = (request.headers.get("User-Agent") or "unknown browser").split(" ", 1)[0]
+    ip = request_ip(request)
+    return f"{user_agent} at {ip}" if ip else user_agent
+
+
+def maybe_create_concurrent_login_notice(user: dict, request: Request, current_jti: str) -> None:
+    security = auth_security_payload(user["id"], current_jti)
+    if not security["hasOtherActiveSessions"]:
+        return
+    count = security["otherActiveSessionCount"]
+    suffix = "" if count == 1 else "s"
+    create_general_notification_event(
+        user_id=user["id"],
+        event_type="account_login",
+        title="New login detected",
+        message=(
+            f"Your account signed in from {login_client_label(request)} while "
+            f"{count} other session{suffix} were active."
+        ),
+        link_url="/?tab=notifications",
+        symbol="SEC",
+        coin_id="security",
+    )
+
+
+def issue_auth_response(
+    user: dict,
+    request: Request,
+    status_code: int = 200,
+    notify_concurrent_login: bool = False,
+) -> JSONResponse:
     access_token = sign_access_token(user)
-    refresh_token, _ = create_refresh_token_record(user, request)
+    refresh_token, current_jti = create_refresh_token_record(user, request)
+    if notify_concurrent_login:
+        maybe_create_concurrent_login_notice(user, request, current_jti)
     response = JSONResponse(
         {
             "ok": True,
             "accessToken": access_token,
             "expiresIn": ACCESS_TOKEN_EXP_SECONDS,
             "user": user,
+            "authSecurity": auth_security_payload(user["id"], current_jti),
         },
         status_code=status_code,
     )
@@ -1124,10 +1203,12 @@ def dev_reload_version():
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     user, auth_error = authenticate_request(request)
+    current_jti = current_refresh_jti(request, user["id"]) if user else ""
     return {
         "authenticated": bool(user),
         "user": user,
         "authError": auth_error,
+        "authSecurity": auth_security_payload(user["id"], current_jti) if user else None,
         "registrationEnabled": registration_is_enabled(),
         "accessTokenTtlSeconds": ACCESS_TOKEN_EXP_SECONDS,
         "loginUrl": "/login",
@@ -1181,7 +1262,7 @@ async def auth_login_api(request: Request):
         return json_error("Invalid credentials", 401)
     if user.get("disabledAt"):
         return json_error("Account disabled", 403)
-    return issue_auth_response(user, request)
+    return issue_auth_response(user, request, notify_concurrent_login=True)
 
 
 @app.post("/api/auth/refresh")
@@ -1238,6 +1319,7 @@ def auth_refresh(request: Request):
             "accessToken": access_token,
             "expiresIn": ACCESS_TOKEN_EXP_SECONDS,
             "user": user,
+            "authSecurity": auth_security_payload(user["id"], new_jti),
         }
     )
     set_refresh_cookie(response, new_refresh_token)
@@ -1722,8 +1804,9 @@ async def chat_stream(request: Request, user=Depends(require_user)):
 
     def event_stream():
         reply_parts = []
+        sources_by_url = {}
         try:
-            for token in run_agent_stream(
+            for event in run_agent_stream(
                 user_input,
                 get_conversation_history(user),
                 mode=mode,
@@ -1731,14 +1814,41 @@ async def chat_stream(request: Request, user=Depends(require_user)):
                 ai_profile=ai_profile,
                 recent_activity=recent_activity,
                 uploaded_files=uploaded_files,
+                event_mode=True,
             ):
+                if isinstance(event, dict):
+                    event_type = event.get("type")
+                    if event_type == "token":
+                        content = event.get("content", "")
+                        reply_parts.append(content)
+                        yield sse({"type": "token", "content": content})
+                    elif event_type == "sources":
+                        fresh_sources = []
+                        for source in event.get("sources", []) or []:
+                            url = source.get("url")
+                            if not url or url in sources_by_url:
+                                continue
+                            sources_by_url[url] = source
+                            fresh_sources.append(source)
+                        if fresh_sources:
+                            yield sse({"type": "sources", "sources": fresh_sources})
+                    elif event_type == "status":
+                        yield sse(event)
+                    continue
+
+                token = str(event)
                 reply_parts.append(token)
                 yield sse({"type": "token", "content": token})
 
             reply = "".join(reply_parts) or "No response."
             duration_ms = int((time.perf_counter() - started_at) * 1000)
             log_user_request(user["id"], user_input, reply, "ok", None, duration_ms, mode, mode_config.model)
-            yield sse({"type": "done", "mode": mode, "model": mode_config.model})
+            yield sse({
+                "type": "done",
+                "mode": mode,
+                "model": mode_config.model,
+                "sources": list(sources_by_url.values()),
+            })
         except Exception as exc:
             duration_ms = int((time.perf_counter() - started_at) * 1000)
             partial = "".join(reply_parts) or None

@@ -103,6 +103,49 @@
     .main-tab-badge.alert {
       background: #a04050;
     }
+    .session-alert {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 42px;
+      padding: 8px 20px;
+      border-bottom: 1px solid rgba(239,159,39,.35);
+      background: #151109;
+      color: #f1c46f;
+      font-family: Arial, Helvetica, sans-serif;
+      flex-shrink: 0;
+    }
+    .session-alert.collapsed {
+      display: none;
+    }
+    .session-alert-title {
+      color: #fff0c7;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+    .session-alert-message {
+      color: #d3b26f;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .session-alert-close {
+      border: 1px solid rgba(239,159,39,.45);
+      border-radius: 6px;
+      background: transparent;
+      color: #f1c46f;
+      cursor: pointer;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 6px 10px;
+      text-transform: uppercase;
+    }
+    .session-alert-close:hover {
+      border-color: #ef9f27;
+      color: #fff0c7;
+    }
     .hdr-right { display: flex; align-items: center; gap: 10px; }
     .theme-switch {
       display: flex;
@@ -1377,17 +1420,112 @@
     .thinking-panel.collapsed .thinking-body {
       display: none;
     }
-    .thinking-body ul {
-      margin: 0;
-      padding-left: 17px;
+    .thinking-live {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #e9ebf5;
+      min-height: 22px;
     }
-    .thinking-body li {
-      margin: 3px 0;
+    .thinking-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #5d96ff;
+      box-shadow: 0 0 0 rgba(93,150,255,.35);
+      animation: thinkingPulse 1.2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .thinking-panel[data-done="true"] .thinking-pulse {
+      background: #49a66d;
+      animation: none;
+    }
+    @keyframes thinkingPulse {
+      0% { box-shadow: 0 0 0 0 rgba(93,150,255,.35); opacity: .65; }
+      60% { box-shadow: 0 0 0 7px rgba(93,150,255,0); opacity: 1; }
+      100% { box-shadow: 0 0 0 0 rgba(93,150,255,0); opacity: .65; }
+    }
+    .thinking-live-time {
+      color: #6f788a;
+      font-size: 12px;
+      margin-left: 2px;
+    }
+    .thinking-log {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 9px;
+    }
+    .thinking-event {
+      color: #8791a5;
+      font-size: 13px;
+    }
+    .thinking-event.done {
+      color: #aeb7c8;
     }
     .thinking-note {
       color: #6f788a;
       font-size: 12px;
       margin-top: 8px;
+    }
+    .source-links {
+      width: min(100%, 880px);
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid #1a1e28;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .source-title {
+      color: #e9ebf5;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 7px;
+    }
+    .source-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      width: max-content;
+      max-width: 260px;
+      color: #f4f6ff;
+      background: #242630;
+      border: 1px solid #353846;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-decoration: none;
+      vertical-align: baseline;
+    }
+    .source-link:hover {
+      color: #fff;
+      border-color: rgba(140,167,255,.65);
+      background: #2d3040;
+      text-decoration: none;
+    }
+    .source-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #8ca7ff;
+      color: #05060a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    .source-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     /* Actions under messages */
@@ -2282,6 +2420,7 @@
       }
     }
   </style>
+  {% include "partials/theme_head.html" %}
 </head>
 <body>
 
@@ -2333,6 +2472,14 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="session-alert collapsed" id="sessionAlert" role="status" aria-live="polite">
+    <div>
+      <div class="session-alert-title">Account active elsewhere</div>
+      <div class="session-alert-message" id="sessionAlertMessage">This account is active in another tab or device.</div>
+    </div>
+    <button class="session-alert-close" type="button" onclick="dismissSessionNotice()">Dismiss</button>
   </div>
 
   <div class="body">
@@ -2526,7 +2673,10 @@
 
     <div class="messages-col collapsed" id="messagesCol">
       <div class="messages-header">
-        <span class="messages-title">MESSENGER</span>
+        <div>
+          <div class="messages-title">Messages</div>
+          <div class="messages-subtitle">Friends and direct messages</div>
+        </div>
         <div class="social-chat-actions">
           <button class="nb-header-btn" type="button" onclick="loadMessageTab()">Refresh</button>
           <button class="nb-header-btn" type="button" onclick="toggleMessagesTab()">Close</button>
@@ -2587,6 +2737,10 @@ const CHAT_PLACEHOLDER = 'Ask about prices, trends, news, or on-chain signals...
 const LOGIN_PLACEHOLDER = 'Login to chat with Crypto Agent...';
 const MESSAGE_TAB_POLL_MS = 5000;
 const NOTIFICATION_POLL_MS = 15000;
+const PRICE_NOTIFICATION_CHECK_MS = 60000;
+const AUTH_SESSION_STATUS_MS = 20000;
+const LOCAL_TAB_HEARTBEAT_MS = 5000;
+const LOCAL_TAB_STALE_MS = 15000;
 const CHAT_ATTACHMENT_LIMIT = 5;
 
 const COINGECKO_MAP = {
@@ -2634,8 +2788,15 @@ let busy = false;
 let chatMode = localStorage.getItem('cryptoAgentChatMode') || 'instant';
 let notificationState = { events: [], settings: [], unreadCount: 0 };
 let notificationPoll = null;
+let notificationPriceCheckPoll = null;
 let notificationEventSeen = new Set();
 let notificationEventInitial = true;
+let authSessionPoll = null;
+let localTabHeartbeat = null;
+let backendSessionSecurity = null;
+let localOtherTabCount = 0;
+let localTabUserId = '';
+let sessionNoticeDismissedKey = '';
 let friendState = { friends: [], sent: [], received: [], searchResults: [] };
 let directChatState = { conversation: null, messages: [] };
 let messageTabState = { conversations: [], activeConversation: null, messages: [], unreadCount: 0 };
@@ -2669,6 +2830,21 @@ let authState = {
 };
 let accessToken = null;
 let notes = [];
+
+function currentBrowserTabId() {
+  try {
+    let tabId = sessionStorage.getItem('cryptoAgentTabId');
+    if (!tabId) {
+      tabId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sessionStorage.setItem('cryptoAgentTabId', tabId);
+    }
+    return tabId;
+  } catch (e) {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+const browserTabId = currentBrowserTabId();
 
 const ROOT_VIEWPORT_PADDING = 24;
 
@@ -2969,6 +3145,17 @@ function renderChatMode() {
 function fmtNotificationTime(epoch) {
   if (!epoch) return '';
   return new Date(epoch * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtRelativeTime(epoch) {
+  const value = Number(epoch || 0);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - value);
+  if (diff < 60) return 'now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'yesterday';
+  return new Date(value * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function renderNotifications() {
@@ -3299,6 +3486,21 @@ function messageTabConversationPreview(conversation) {
   return `${prefix}${last.content || ''}`;
 }
 
+function messageTabConversationAvatar(conversation) {
+  const user = conversation?.otherUser || {};
+  const label = messageTabConversationName(conversation);
+  if (isPictureSrc(user.picture || '')) {
+    return `<span class="conversation-avatar"><img src="${escapeAttr(user.picture)}" alt="" /></span>`;
+  }
+  const words = String(label || '?').trim().split(/\s+/).slice(0, 2);
+  const initials = words.map(word => word[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+  return `<span class="conversation-avatar">${escape(initials)}</span>`;
+}
+
+function messageTabConversationTime(conversation) {
+  return fmtRelativeTime(conversation?.lastMessage?.createdAt || conversation?.lastMessageAt || conversation?.updatedAt || conversation?.createdAt);
+}
+
 function messageTabLastMessageId(conversation) {
   return String(conversation?.lastMessage?.id || conversation?.lastMessageId || '');
 }
@@ -3412,13 +3614,18 @@ function renderConversationList() {
   const activeId = messageTabState.activeConversation?.id;
   root.innerHTML = conversations.map(conversation => {
     const unread = Number(conversation.unreadCount || 0);
+    const time = messageTabConversationTime(conversation);
     return `
       <button class="conversation-item ${String(conversation.id) === String(activeId) ? 'active' : ''}" type="button" onclick="openMessageConversation('${escapeJS(conversation.id)}')">
-        <span style="min-width:0">
+        ${messageTabConversationAvatar(conversation)}
+        <span class="conversation-main">
           <span class="conversation-name">${escape(messageTabConversationName(conversation))}</span>
           <span class="conversation-preview">${escape(messageTabConversationPreview(conversation))}</span>
         </span>
-        ${unread > 0 ? `<span class="conversation-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
+        <span class="conversation-meta">
+          ${time ? `<span class="conversation-time">${escape(time)}</span>` : ''}
+          ${unread > 0 ? `<span class="conversation-unread">${unread > 9 ? '9+' : unread}</span>` : ''}
+        </span>
       </button>
     `;
   }).join('');
@@ -3802,15 +4009,21 @@ async function loadNotifications(check = false) {
 
 function startNotificationPolling() {
   if (notificationPoll) clearInterval(notificationPoll);
+  if (notificationPriceCheckPoll) clearInterval(notificationPriceCheckPoll);
   if (!authState.authenticated) return;
   notificationEventInitial = true;
-  loadNotifications(true);
-  notificationPoll = setInterval(() => loadNotifications(true), NOTIFICATION_POLL_MS);
+  loadNotifications(false).finally(() => {
+    if (authState.authenticated) loadNotifications(true);
+  });
+  notificationPoll = setInterval(() => loadNotifications(false), NOTIFICATION_POLL_MS);
+  notificationPriceCheckPoll = setInterval(() => loadNotifications(true), PRICE_NOTIFICATION_CHECK_MS);
 }
 
 function stopNotificationPolling() {
   if (notificationPoll) clearInterval(notificationPoll);
+  if (notificationPriceCheckPoll) clearInterval(notificationPriceCheckPoll);
   notificationPoll = null;
+  notificationPriceCheckPoll = null;
   notificationEventSeen.clear();
   notificationEventInitial = true;
 }
@@ -4670,6 +4883,164 @@ function showToast(msg) {
   container.innerHTML = `<div class="toast">${escape(String(msg).toUpperCase())}</div>`;
 }
 
+function sessionUserId() {
+  return authState.authenticated && authState.user?.id ? String(authState.user.id) : '';
+}
+
+function sessionTabsStorageKey(userId = sessionUserId()) {
+  return userId ? `cryptoAgentOpenTabs:${userId}` : '';
+}
+
+function readLocalSessionTabs(userId = sessionUserId()) {
+  const key = sessionTabsStorageKey(userId);
+  if (!key) return {};
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeLocalSessionTabs(userId, tabs) {
+  const key = sessionTabsStorageKey(userId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(tabs || {}));
+  } catch (e) {
+    // Ignore storage failures; backend session checks still work.
+  }
+}
+
+function activeOtherLocalTabCount(tabs, now = Date.now()) {
+  return Object.entries(tabs || {}).filter(([tabId, tab]) => {
+    const lastSeen = Number(tab?.lastSeen || 0);
+    return tabId !== browserTabId && lastSeen && now - lastSeen <= LOCAL_TAB_STALE_MS;
+  }).length;
+}
+
+function sessionNoticeKey() {
+  const userId = sessionUserId();
+  const backendCount = Number(backendSessionSecurity?.otherActiveSessionCount || 0);
+  return `${userId}:${backendCount}:${localOtherTabCount}`;
+}
+
+function renderSessionNotice() {
+  const alert = document.getElementById('sessionAlert');
+  const message = document.getElementById('sessionAlertMessage');
+  if (!alert || !message) return;
+
+  const backendCount = Number(backendSessionSecurity?.otherActiveSessionCount || 0);
+  const hasBackendSession = authState.authenticated && backendCount > 0;
+  const hasLocalTabs = authState.authenticated && localOtherTabCount > 0;
+  const noticeKey = sessionNoticeKey();
+
+  if ((!hasBackendSession && !hasLocalTabs) || noticeKey === sessionNoticeDismissedKey) {
+    alert.classList.add('collapsed');
+    return;
+  }
+
+  const parts = [];
+  if (hasBackendSession) {
+    parts.push(`another browser or device (${backendCount} active session${backendCount === 1 ? '' : 's'})`);
+  }
+  if (hasLocalTabs) {
+    parts.push(`another open tab (${localOtherTabCount} tab${localOtherTabCount === 1 ? '' : 's'})`);
+  }
+  message.textContent = `This account is also active in ${parts.join(' and ')}.`;
+  alert.classList.remove('collapsed');
+}
+
+function dismissSessionNotice() {
+  sessionNoticeDismissedKey = sessionNoticeKey();
+  renderSessionNotice();
+}
+
+function applySessionSecurity(security) {
+  backendSessionSecurity = security || null;
+  renderSessionNotice();
+}
+
+function syncLocalSessionTabs(writePresence = false) {
+  const userId = sessionUserId();
+  if (!userId) {
+    localOtherTabCount = 0;
+    renderSessionNotice();
+    return;
+  }
+
+  const now = Date.now();
+  const tabs = readLocalSessionTabs(userId);
+  Object.keys(tabs).forEach(tabId => {
+    if (now - Number(tabs[tabId]?.lastSeen || 0) > LOCAL_TAB_STALE_MS) {
+      delete tabs[tabId];
+    }
+  });
+  if (writePresence) {
+    tabs[browserTabId] = { lastSeen: now };
+    writeLocalSessionTabs(userId, tabs);
+  }
+  localOtherTabCount = activeOtherLocalTabCount(tabs, now);
+  renderSessionNotice();
+}
+
+function removeLocalSessionTab(userId = localTabUserId) {
+  if (!userId) return;
+  const tabs = readLocalSessionTabs(userId);
+  delete tabs[browserTabId];
+  writeLocalSessionTabs(userId, tabs);
+}
+
+function startLocalSessionTabTracking() {
+  if (localTabHeartbeat) clearInterval(localTabHeartbeat);
+  if (!authState.authenticated) return;
+  localTabUserId = sessionUserId();
+  syncLocalSessionTabs(true);
+  localTabHeartbeat = setInterval(() => syncLocalSessionTabs(true), LOCAL_TAB_HEARTBEAT_MS);
+}
+
+function stopLocalSessionTabTracking() {
+  if (localTabHeartbeat) clearInterval(localTabHeartbeat);
+  localTabHeartbeat = null;
+  removeLocalSessionTab();
+  localTabUserId = '';
+  localOtherTabCount = 0;
+  renderSessionNotice();
+}
+
+async function pollAuthSessionStatus() {
+  if (!authState.authenticated) return;
+  if (!accessToken) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) return;
+  }
+  try {
+    const res = await authFetch(API_AUTH_ME);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.authenticated) {
+      applySessionSecurity(null);
+      return;
+    }
+    authState = { ...authState, ...data };
+    applySessionSecurity(data.authSecurity);
+  } catch (e) {
+    console.error('Session status failed:', e);
+  }
+}
+
+function startAuthSessionPolling() {
+  if (authSessionPoll) clearInterval(authSessionPoll);
+  if (!authState.authenticated) return;
+  pollAuthSessionStatus();
+  authSessionPoll = setInterval(pollAuthSessionStatus, AUTH_SESSION_STATUS_MS);
+}
+
+function stopAuthSessionPolling() {
+  if (authSessionPoll) clearInterval(authSessionPoll);
+  authSessionPoll = null;
+  applySessionSecurity(null);
+}
+
 function applyAuthPayload(data) {
   if (!data) return;
   if (data.accessToken) accessToken = data.accessToken;
@@ -4677,6 +5048,7 @@ function applyAuthPayload(data) {
     authState.authenticated = true;
     authState.user = data.user;
   }
+  if ('authSecurity' in data) applySessionSecurity(data.authSecurity);
 }
 
 async function refreshAccessToken() {
@@ -4725,6 +5097,7 @@ async function loadAuthState() {
       credentials: 'same-origin',
     });
     authState = await res.json();
+    applySessionSecurity(authState.authSecurity);
   } catch (e) {
     authState = {
       authenticated: false,
@@ -4734,6 +5107,7 @@ async function loadAuthState() {
       registerUrl: AUTH_REGISTER,
       logoutUrl: AUTH_LOGOUT,
     };
+    applySessionSecurity(null);
     console.error('Auth state failed:', e);
   }
   renderAuthState();
@@ -4867,6 +5241,8 @@ async function handleAuthClick() {
     await authFetch(authState.logoutUrl || AUTH_LOGOUT, { method: 'POST' }, false);
   } finally {
     authSessionVersion += 1;
+    stopAuthSessionPolling();
+    stopLocalSessionTabTracking();
     stopNotificationPolling();
     stopMessageTabPolling();
     accessToken = null;
@@ -4925,8 +5301,33 @@ function escapeJS(str) {
     .replace(/\r/g, '\\r');
 }
 
+function sourceDomain(url) {
+  try {
+    return new URL(String(url || '').replace(/&amp;/g, '&')).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return 'source';
+  }
+}
+
+function compactSourceLabel(label, url) {
+  const value = String(label || '').replace(/&amp;/g, '&').trim();
+  if (!value || value.startsWith('http') || value.length > 28) return sourceDomain(url);
+  return value;
+}
+
+function sourcePillHtml(label, url, extra = '') {
+  const cleanUrl = String(url || '').replace(/&amp;/g, '&');
+  const cleanLabel = compactSourceLabel(label, cleanUrl);
+  const initial = cleanLabel ? cleanLabel[0].toUpperCase() : 'S';
+  return `<a class="source-link" href="${escapeAttr(cleanUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(sourceDomain(cleanUrl))}">
+    <span class="source-dot">${escape(initial)}</span>
+    <span class="source-label">${escape(cleanLabel)}</span>${extra}
+  </a>`;
+}
+
 function fmtInline(line) {
   return line
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => sourcePillHtml(label, url))
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
@@ -4979,35 +5380,66 @@ function thinkingTitle(mode, done, seconds) {
   return `${label} for ${seconds} second${seconds === 1 ? '' : 's'}`;
 }
 
-function thinkingStepsHtml(mode, phase, done) {
-  const modeStep = mode === 'reasoning'
-    ? 'Using the deeper reasoning mode for assumptions, evidence, and tradeoffs.'
-    : 'Using the instant mode for a concise answer.';
-  const finalStep = done
-    ? 'Prepared the final answer.'
-    : phase === 'writing'
-      ? 'Writing the answer.'
-      : 'Checking whether notes, uploads, or market tools are needed.';
+function thinkingStepsHtml(panel) {
+  const current = panel?._current || 'Reading request';
+  const seconds = thinkingSeconds(panel);
+  const events = (panel?._events || []).slice(-5);
+  const eventHtml = events.length
+    ? `<div class="thinking-log">${events.map(event => `<div class="thinking-event ${event.done ? 'done' : ''}">${escape(event.text)}</div>`).join('')}</div>`
+    : '';
   return `
-    <ul>
-      <li>Read the question and selected context.</li>
-      <li>${modeStep}</li>
-      <li>${finalStep}</li>
-    </ul>
+    <div class="thinking-live">
+      <span class="thinking-pulse"></span>
+      <span>${escape(current)}</span>
+      <span class="thinking-live-time">${seconds}s</span>
+    </div>
+    ${eventHtml}
+    <div class="thinking-note">Live tool trace, not private chain-of-thought.</div>
   `;
+}
+
+function addThinkingStep(panel, message, elapsedMs = null, phase = '') {
+  if (!panel || !message) return;
+  panel._events = panel._events || [];
+  const text = String(message);
+  if (phase === 'tool_done') {
+    const duration = Number.isFinite(Number(elapsedMs)) ? ` in ${(Number(elapsedMs) / 1000).toFixed(1)}s` : '';
+    panel._events.push({ text: `${text}${duration}`, done: true });
+    panel._current = 'Reviewing results';
+    return;
+  }
+  if (phase === 'sources') {
+    panel._events.push({ text, done: true });
+    panel._current = 'Checking sources';
+    return;
+  }
+  if (phase === 'done') {
+    panel._current = 'Final answer ready';
+    return;
+  }
+  if (phase === 'writing') {
+    panel._current = 'Writing answer';
+    return;
+  }
+  if (phase === 'start') {
+    panel._current = 'Reading request';
+    return;
+  }
+  panel._current = text;
 }
 
 function updateThinkingPanel(panel, options = {}) {
   if (!panel) return;
   if (options.phase) panel.dataset.phase = options.phase;
   if (options.done) panel.dataset.done = 'true';
+  if (options.message) addThinkingStep(panel, options.message, options.elapsedMs, options.phase || '');
   const mode = panel.dataset.mode || 'instant';
   const done = panel.dataset.done === 'true';
   const seconds = thinkingSeconds(panel);
   const title = panel.querySelector('.thinking-title');
   const body = panel.querySelector('.thinking-body');
   if (title) title.textContent = thinkingTitle(mode, done, seconds);
-  if (body) body.innerHTML = thinkingStepsHtml(mode, panel.dataset.phase || 'thinking', done);
+  if (body) body.innerHTML = thinkingStepsHtml(panel);
 }
 
 function toggleThinkingPanel(button) {
@@ -5019,6 +5451,8 @@ function attachThinkingPanel(messageEl, mode) {
   if (!body) return null;
   const panel = document.createElement('div');
   panel.className = 'thinking-panel';
+  panel._events = [];
+  panel._current = 'Reading request';
   panel.dataset.mode = mode || 'instant';
   panel.dataset.phase = 'thinking';
   panel.dataset.startedAt = String(Date.now());
@@ -5030,7 +5464,7 @@ function attachThinkingPanel(messageEl, mode) {
     <div class="thinking-body"></div>
   `;
   body.insertBefore(panel, body.querySelector('.bbl'));
-  updateThinkingPanel(panel);
+  updateThinkingPanel(panel, { phase: 'start', message: 'Reading request' });
   panel._timer = setInterval(() => updateThinkingPanel(panel), 1000);
   return panel;
 }
@@ -5039,7 +5473,7 @@ function completeThinkingPanel(messageEl) {
   const panel = messageEl?.querySelector('.thinking-panel');
   if (!panel) return;
   if (panel._timer) clearInterval(panel._timer);
-  updateThinkingPanel(panel, { done: true, phase: 'done' });
+  updateThinkingPanel(panel, { done: true, phase: 'done', message: 'Final answer ready' });
 }
 
 function failThinkingPanel(messageEl) {
@@ -5287,6 +5721,40 @@ function chatRequestOptions(text, attachments) {
   };
 }
 
+function renderMessageSources(messageEl, incomingSources = []) {
+  const body = messageEl?.querySelector('.msg-body');
+  if (!body || !incomingSources.length) return;
+  messageEl._sources = messageEl._sources || [];
+  const seen = new Set(messageEl._sources.map(source => source.url));
+  incomingSources.forEach(source => {
+    const url = source?.url || '';
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    messageEl._sources.push({
+      title: source.title || url,
+      url,
+    });
+  });
+  if (!messageEl._sources.length) return;
+
+  let root = body.querySelector('.source-links');
+  if (!root) {
+    root = document.createElement('div');
+    root.className = 'source-links';
+    const bubble = body.querySelector('.bbl');
+    if (bubble?.nextSibling) body.insertBefore(root, bubble.nextSibling);
+    else body.appendChild(root);
+  }
+  root.innerHTML = `
+    <div class="source-title">Sources</div>
+    <div class="source-list">
+      ${messageEl._sources.map(source => `
+        ${sourcePillHtml(source.title, source.url)}
+      `).join('')}
+    </div>
+  `;
+}
+
 function addMsg(role, rawText, isHtml = false) {
   const isUser = role === 'user';
   const el = document.createElement('div');
@@ -5350,9 +5818,31 @@ async function streamAgentReply(txt, messageEl, attachments = []) {
 
   async function handlePayload(payload) {
     if (!payload) return false;
+    if (payload.type === 'status') {
+      updateThinkingPanel(messageEl.querySelector('.thinking-panel'), {
+        phase: payload.phase || 'working',
+        message: payload.message || '',
+        elapsedMs: payload.elapsedMs,
+      });
+      return false;
+    }
+    if (payload.type === 'sources') {
+      renderMessageSources(messageEl, payload.sources || []);
+      const count = (payload.sources || []).length;
+      if (count) {
+        updateThinkingPanel(messageEl.querySelector('.thinking-panel'), {
+          phase: 'sources',
+          message: `Found ${count} source${count === 1 ? '' : 's'}`,
+        });
+      }
+      return false;
+    }
     if (payload.type === 'token') {
       if (!wroteFirstToken) {
-        updateThinkingPanel(messageEl.querySelector('.thinking-panel'), { phase: 'writing' });
+        updateThinkingPanel(messageEl.querySelector('.thinking-panel'), {
+          phase: 'writing',
+          message: 'Writing answer',
+        });
         wroteFirstToken = true;
       }
       reply += payload.content || '';
@@ -5362,6 +5852,10 @@ async function streamAgentReply(txt, messageEl, attachments = []) {
     }
     if (payload.type === 'error') {
       throw new Error(payload.error || 'Chat stream failed');
+    }
+    if (payload.type === 'done') {
+      renderMessageSources(messageEl, payload.sources || []);
+      return true;
     }
     return payload.type === 'done';
   }
@@ -5470,6 +5964,14 @@ window.addEventListener('click', e => {
 window.addEventListener('pointermove', moveDirectChat);
 window.addEventListener('pointerup', stopDirectChatDrag);
 window.addEventListener('pointercancel', stopDirectChatDrag);
+window.addEventListener('storage', event => {
+  if (localTabUserId && event.key === sessionTabsStorageKey(localTabUserId)) {
+    syncLocalSessionTabs(false);
+  }
+});
+window.addEventListener('beforeunload', () => {
+  removeLocalSessionTab();
+});
 window.addEventListener('resize', () => {
   syncRootWidth();
   placeDirectChat();
@@ -5491,6 +5993,8 @@ async function init() {
   renderMessageTab();
   renderPortfolio();
   await loadAuthState();
+  startLocalSessionTabTracking();
+  startAuthSessionPolling();
   await loadAgentGreeting();
   applyInitialPage();
   await fetchPrices();

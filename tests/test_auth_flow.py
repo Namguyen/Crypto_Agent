@@ -85,6 +85,50 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("accessToken", data)
             self.assertEqual(data["user"]["username"], "newuser")
 
+    def test_concurrent_login_sets_security_notice(self):
+        username = "multisession"
+        password = "password123"
+
+        with TestClient(self.app) as first, TestClient(self.app) as second:
+            register = first.post(
+                "/api/auth/register",
+                json={
+                    "username": username,
+                    "email": f"{username}@example.com",
+                    "password": password,
+                },
+            )
+            self.assertEqual(register.status_code, 201)
+            first_token = register.json()["accessToken"]
+            first_headers = {"Authorization": f"Bearer {first_token}"}
+            self.assertFalse(register.json()["authSecurity"]["hasOtherActiveSessions"])
+
+            first_status = first.get("/api/auth/me", headers=first_headers)
+            self.assertEqual(first_status.status_code, 200)
+            self.assertFalse(first_status.json()["authSecurity"]["hasOtherActiveSessions"])
+
+            second_login = second.post(
+                "/api/auth/login",
+                json={"login": username, "password": password},
+            )
+            self.assertEqual(second_login.status_code, 200)
+            self.assertTrue(second_login.json()["authSecurity"]["hasOtherActiveSessions"])
+            self.assertEqual(second_login.json()["authSecurity"]["otherActiveSessionCount"], 1)
+
+            first_status_after = first.get("/api/auth/me", headers=first_headers)
+            self.assertEqual(first_status_after.status_code, 200)
+            self.assertTrue(first_status_after.json()["authSecurity"]["hasOtherActiveSessions"])
+
+            notifications = first.get("/api/notifications", headers=first_headers)
+            self.assertEqual(notifications.status_code, 200)
+            security_events = [
+                event
+                for event in notifications.json()["events"]
+                if event["eventType"] == "account_login"
+            ]
+            self.assertTrue(security_events)
+            self.assertEqual(security_events[0]["title"], "New login detected")
+
     def test_user_can_update_profile(self):
         with TestClient(self.app) as client:
             login = client.post(
@@ -173,6 +217,10 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn('id="mainTabFriends"', index.text)
             self.assertIn('id="mainTabNotes"', index.text)
             self.assertIn('id="mainTabForum"', index.text)
+            self.assertIn('/static/css/theme-tokens.css', index.text)
+            self.assertIn('/static/css/app-shell.css', index.text)
+            self.assertIn('class="conversation-avatar"', index.text)
+            self.assertIn("Friends and direct messages", index.text)
             self.assertIn("window.location.href='/forum'", index.text)
             self.assertIn('id="themeToggle"', index.text)
             self.assertIn('id="agentView"', index.text)
@@ -211,6 +259,14 @@ class AuthFlowTest(unittest.TestCase):
             self.assertIn("refreshPortfolio", index.text)
             self.assertIn("MESSAGE_TAB_POLL_MS", index.text)
             self.assertIn("NOTIFICATION_POLL_MS", index.text)
+            self.assertIn("PRICE_NOTIFICATION_CHECK_MS", index.text)
+            self.assertIn("AUTH_SESSION_STATUS_MS", index.text)
+            self.assertIn('id="sessionAlert"', index.text)
+            self.assertIn("startLocalSessionTabTracking", index.text)
+            self.assertIn("startAuthSessionPolling", index.text)
+            self.assertIn("loadNotifications(false).finally", index.text)
+            self.assertIn("setInterval(() => loadNotifications(false), NOTIFICATION_POLL_MS)", index.text)
+            self.assertIn("setInterval(() => loadNotifications(true), PRICE_NOTIFICATION_CHECK_MS)", index.text)
             self.assertIn("messageTabUnreadTotal", index.text)
             self.assertIn("connectMessageTabSocket", index.text)
             self.assertIn("messageTabSocket", index.text)
@@ -242,6 +298,7 @@ class AuthFlowTest(unittest.TestCase):
             friends = client.get("/friends")
             self.assertEqual(friends.status_code, 200)
             self.assertIn('id="friendSearchResults"', friends.text)
+            self.assertIn('/static/css/app-shell.css', friends.text)
             self.assertIn('id="socialChatCol"', friends.text)
             self.assertIn('id="socialChatMessages"', friends.text)
             self.assertIn('id="directChatBubble"', friends.text)
@@ -256,6 +313,7 @@ class AuthFlowTest(unittest.TestCase):
             profiles = client.get("/profiles")
             self.assertEqual(profiles.status_code, 200)
             self.assertIn('id="profileForm"', profiles.text)
+            self.assertIn('/static/css/app-shell.css', profiles.text)
             self.assertIn('id="globalDirectChatDock"', profiles.text)
             self.assertIn('id="globalDirectChatPanels"', profiles.text)
             self.assertIn('id="profileDisplayName"', profiles.text)
@@ -274,17 +332,24 @@ class AuthFlowTest(unittest.TestCase):
             profile = client.get("/profile")
             self.assertEqual(profile.status_code, 200)
             self.assertIn('id="profileForm"', profile.text)
+            self.assertIn('/static/css/app-shell.css', profile.text)
 
             login = client.get("/login")
             self.assertEqual(login.status_code, 200)
             self.assertIn('id="authForm"', login.text)
             self.assertIn("/api/auth/login", login.text)
+            self.assertIn('/static/css/theme-tokens.css', login.text)
             self.assertIn("/api/dev/reload-version", login.text)
 
             register = client.get("/register")
             self.assertEqual(register.status_code, 200)
             self.assertIn('id="authForm"', register.text)
             self.assertIn("/api/auth/register", register.text)
+            self.assertIn('/static/css/app-shell.css', register.text)
+
+            theme_css = client.get("/static/css/app-shell.css")
+            self.assertEqual(theme_css.status_code, 200)
+            self.assertIn(".main-tab", theme_css.text)
 
             reload_version = client.get("/api/dev/reload-version")
             self.assertEqual(reload_version.status_code, 200)
@@ -972,6 +1037,33 @@ class AuthFlowTest(unittest.TestCase):
             self.assertEqual(len(uploaded_files), 1)
             self.assertEqual(uploaded_files[0]["name"], "context.md")
             self.assertIn("ETH rotation context", uploaded_files[0]["text"])
+            self.assertTrue(run_agent_stream.call_args.kwargs["event_mode"])
+
+    def test_chat_stream_returns_status_and_sources(self):
+        stream_events = iter([
+            {"type": "status", "phase": "tool_start", "message": "Using crypto news search"},
+            {"type": "sources", "sources": [{"title": "Bitcoin ETF update", "url": "https://example.com/btc-etf"}]},
+            {"type": "token", "content": "news reply"},
+            {"type": "status", "phase": "done", "message": "Prepared final answer"},
+        ])
+        with TestClient(self.app) as client, patch("backend.app.run_agent_stream", return_value=stream_events):
+            login = client.post("/api/auth/login", json={"login": "seed", "password": "password123"})
+            token = login.json()["accessToken"]
+
+            res = client.post(
+                "/api/chat/stream",
+                json={"message": "Latest BTC news", "mode": "instant"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            self.assertEqual(res.status_code, 200)
+            self.assertIn('"type": "status"', res.text)
+            self.assertIn('"message": "Using crypto news search"', res.text)
+            self.assertIn('"type": "sources"', res.text)
+            self.assertIn("https://example.com/btc-etf", res.text)
+            self.assertIn('"content": "news reply"', res.text)
+            self.assertIn('"type": "done"', res.text)
+            self.assertIn('"sources": [{"title": "Bitcoin ETF update", "url": "https://example.com/btc-etf"}]', res.text)
 
     def test_in_app_price_notifications(self):
         market_payload = {

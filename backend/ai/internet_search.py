@@ -1,49 +1,91 @@
 import os
+from functools import lru_cache
+from urllib.parse import urlparse
+
 from tavily import TavilyClient
 
-def search_crypto_news(query: str) -> str:
-    """Search the latest crypto news and updates using the Tavily API."""
-    # Khởi tạo Tavily Client (nên đặt ở ngoài để tối ưu)
+
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+@lru_cache(maxsize=1)
+def tavily_client() -> TavilyClient | None:
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:
+        return None
+    return TavilyClient(api_key=api_key)
+
+
+def source_label(url: str, title: str = "") -> str:
+    hostname = urlparse(url or "").hostname or ""
+    hostname = hostname.removeprefix("www.")
+    if hostname:
+        parts = hostname.split(".")
+        if len(parts) >= 2:
+            return parts[-2].replace("-", " ").title()
+        return hostname.replace("-", " ").title()
+    return (title or "Source")[:40]
+
+
+def search_crypto_news(query: str) -> str:
+    """Search recent crypto news and return concise results with source links."""
+    client = tavily_client()
+    if not client:
         return "Error: TAVILY_API_KEY not configured in .env"
-    
-    client = TavilyClient(api_key=api_key)
-    
-    # Thêm từ khóa "crypto" vào câu query để lọc kết quả
-    search_query = f"crypto {query}"
-    
+
+    search_query = f"crypto {query}".strip()
+    max_results = max(1, min(env_int("TAVILY_MAX_RESULTS", 3), 8))
+    search_depth = os.getenv("TAVILY_SEARCH_DEPTH", "basic").strip().lower() or "basic"
+    include_raw_content = env_bool("TAVILY_INCLUDE_RAW_CONTENT", False)
+
     try:
-        # Gọi API tìm kiếm, giới hạn 5 kết quả và lấy nội dung đầy đủ
         response = client.search(
             query=search_query,
-            search_depth="advanced", # Lấy nội dung chi tiết từ trang web
-            max_results=5,
-            include_answer=True,    # Lấy câu trả lời tóm tắt nếu có
-            include_raw_content=True, # Lấy nội dung thô
-            topic="general"            # Ưu tiên tin tức
+            search_depth=search_depth,
+            max_results=max_results,
+            include_answer=True,
+            include_raw_content=include_raw_content,
+            topic="news",
         )
-        
-        # Xử lý kết quả trả về
-        answer = response.get('answer', '')
-        results = response.get('results', [])
-        
-        if not results and not answer:
-            return f"Sorry, I couldn't find recent news about '{query}'."
+    except Exception as exc:
+        return f"Error connecting to Tavily API: {exc}"
 
-        output = f"📰 **Search results for '{query}'**\n\n"
+    answer = response.get("answer", "") or ""
+    results = response.get("results", []) or []
+    if not results and not answer:
+        return f"Sorry, I couldn't find recent news about '{query}'."
 
-        if answer:
-            output += f"📌 **Summary:** {answer}\n\n"
+    lines = [
+        f"Search results for '{query}':",
+        "Use the Source links as compact inline citations after relevant claims.",
+    ]
+    if answer:
+        lines.extend(["", f"Summary: {answer}"])
 
-        output += "🔍 **Related articles:**\n"
-        for i, item in enumerate(results, 1):
-            title = item.get('title', 'No title')
-            url = item.get('url', '#')
-            content = item.get('content', '')[:200]  # Lấy 200 ký tự đầu
-            output += f"{i}. **{title}**\n   📎 {url}\n   📄 {content}...\n\n"
-        
-        return output
-    except Exception as e:
-        return f"Error connecting to Tavily API: {e}"
+    if results:
+        lines.extend(["", "Sources:"])
+        for index, item in enumerate(results, start=1):
+            title = item.get("title") or "Untitled source"
+            url = item.get("url") or ""
+            content = (item.get("content") or "").strip()
+            label = source_label(url, title)
+            if url:
+                lines.append(f"{index}. Title: {title}")
+                lines.append(f"   Source: [{label}]({url})")
+            else:
+                lines.append(f"{index}. {title}")
+            if content:
+                lines.append(f"   Brief: {content[:240]}")
 
+    return "\n".join(lines)

@@ -1,0 +1,161 @@
+:root {
+  color-scheme: dark;
+  --ca-bg: #08090d;
+  --ca-bg-elevated: #0c0d12;
+  --ca-panel: #101116;
+  --ca-panel-2: #15161d;
+  --ca-panel-3: #1b1c24;
+  --ca-row: #0f1015;
+  --ca-row-hover: #171821;
+  --ca-border: #24252d;
+  --ca-border-soft: #1b1c23;
+  --ca-text: #f2f0f8;
+  --ca-text-soft: #c8c5d0;
+  --ca-muted: #696974;
+  --ca-muted-2: #46464f;
+  --ca-purple: #7f63ff;
+  --ca-purple-2: #5e46d8;
+  --ca-red: #ff4d57;
+  --ca-red-soft: #2a1014;
+  --ca-green: #19c37d;
+  --ca-green-soft: #062415;
+  --ca-yellow: #f4c84f;
+  --ca-radius: 8px;
+  --ca-radius-sm: 6px;
+  --ca-font: Arial, Helvetica, sans-serif;
+  --ca-shadow: 0 18px 50px rgba(0, 0, 0, .32);
+}
+
+body[data-theme="light"] {
+  color-scheme: light;
+  --ca-bg: #f5f6fa;
+  --ca-bg-elevated: #ffffff;
+  --ca-panel: #ffffff;
+  --ca-panel-2: #f0f2f7;
+  --ca-panel-3: #e8ebf3;
+  --ca-row: #ffffff;
+  --ca-row-hover: #f1f3f8;
+  --ca-border: #d9dce6;
+  --ca-border-soft: #e7e9f0;
+  --ca-text: #171821;
+  --ca-text-soft: #343846;
+  --ca-muted: #6f7380;
+  --ca-muted-2: #8b909d;
+  --ca-purple: #6547e8;
+  --ca-purple-2: #5138c4;
+  --ca-red: #d93e4b;
+  --ca-red-soft: #ffe9ec;
+  --ca-green: #0b8f5a;
+  --ca-green-soft: #e4f8ee;
+  --ca-yellow: #b98500;
+  --ca-shadow: 0 16px 42px rgba(20, 24, 38, .12);
+}
+
+html {
+  background: var(--ca-bg);
+}
+
+body {
+  background: var(--ca-bg) !important;
+  color: var(--ca-text) !important;
+  font-family: var(--ca-font) !important;
+  letter-spacing: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: var(--ca-font) !important;
+  letter-spacing: 0 !important;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+.btn,
+.auth-btn,
+.qbtn,
+.portfolio-button,
+.notif-action,
+.account-item,
+.theme-option {
+  border-radius: var(--ca-radius) !important;
+  border-color: var(--ca-border) !important;
+  background: var(--ca-panel-2) !important;
+  color: var(--ca-text) !important;
+}
+
+button:hover,
+.btn:hover,
+.qbtn:hover,
+.portfolio-button:hover,
+.notif-action:hover,
+.account-item:hover,
+.theme-option:hover {
+  border-color: rgba(127, 99, 255, .72) !important;
+  background: var(--ca-row-hover) !important;
+  color: #fff !important;
+}
+
+button.primary,
+.btn.primary,
+.portfolio-button.primary,
+.profile-save,
+.global-chat-send,
+.auth-shell button[type="submit"] {
+  background: var(--ca-purple) !important;
+  border-color: var(--ca-purple) !important;
+  color: #fff !important;
+}
+
+button.danger,
+.portfolio-button.danger {
+  color: var(--ca-red) !important;
+}
+
+input,
+textarea,
+select {
+  background: var(--ca-bg-elevated) !important;
+  border-color: var(--ca-border) !important;
+  color: var(--ca-text) !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(127, 99, 255, .8) !important;
+  outline: none !important;
+}
+
+::placeholder {
+  color: var(--ca-muted) !important;
+}
+
+table {
+  background: var(--ca-panel) !important;
+  border-color: var(--ca-border) !important;
+}
+
+th,
+td {
+  border-color: var(--ca-border-soft) !important;
+}
+
+th {
+  color: var(--ca-muted) !important;
+}
+
+.empty,
+.notif-empty,
+.portfolio-empty,
+.nb-empty,
+.social-chat-empty,
+.global-chat-empty {
+  color: var(--ca-muted) !important;
+  background: var(--ca-panel) !important;
+  border-color: var(--ca-border) !important;
+}

@@ -66,6 +66,7 @@ def init_auth_db() -> None:
                 revoked_at INTEGER,
                 replaced_by TEXT,
                 created_at INTEGER NOT NULL,
+                last_seen_at INTEGER,
                 ip TEXT,
                 user_agent TEXT,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -187,6 +188,7 @@ def init_auth_db() -> None:
         ensure_column(conn, "user_requests", "model", "TEXT")
         ensure_column(conn, "notification_events", "event_type", "TEXT NOT NULL DEFAULT 'price_alert'")
         ensure_column(conn, "notification_events", "link_url", "TEXT")
+        ensure_column(conn, "refresh_tokens", "last_seen_at", "INTEGER")
 
 
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -336,10 +338,10 @@ def store_refresh_token(
         conn.execute(
             """
             INSERT INTO refresh_tokens
-                (user_id, token_hash, jti, expires_at, created_at, ip, user_agent)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, token_hash, jti, expires_at, created_at, last_seen_at, ip, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, token_hash, jti, expires_at, now, ip, user_agent),
+            (user_id, token_hash, jti, expires_at, now, now, ip, user_agent),
         )
 
 
@@ -371,6 +373,58 @@ def revoke_refresh_token(token_hash: str, replaced_by: Optional[str] = None) -> 
             """,
             (now, replaced_by, token_hash),
         )
+
+
+def touch_refresh_token(token_hash: str, jti: str) -> None:
+    now = int(time.time())
+    with auth_connection() as conn:
+        conn.execute(
+            """
+            UPDATE refresh_tokens
+            SET last_seen_at = ?
+            WHERE token_hash = ? AND jti = ? AND revoked_at IS NULL
+            """,
+            (now, token_hash, jti),
+        )
+
+
+def public_refresh_session(row: sqlite3.Row | dict) -> dict:
+    user_agent = (row["user_agent"] if "user_agent" in row.keys() else "") or ""
+    ip = (row["ip"] if "ip" in row.keys() else "") or ""
+    last_seen_at = row["last_seen_at"] if "last_seen_at" in row.keys() else None
+    return {
+        "createdAt": int(row["created_at"]),
+        "lastSeenAt": int(last_seen_at or row["created_at"]),
+        "ip": ip,
+        "userAgent": user_agent[:180],
+    }
+
+
+def active_refresh_sessions(
+    user_id: int | str,
+    exclude_jti: str = "",
+    active_window_seconds: int = 1800,
+    limit: int = 10,
+) -> list[dict]:
+    now = int(time.time())
+    active_after = now - max(60, int(active_window_seconds or 1800))
+    safe_limit = max(1, min(int(limit or 10), 50))
+    with auth_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM refresh_tokens
+            WHERE user_id = ?
+              AND revoked_at IS NULL
+              AND expires_at >= ?
+              AND COALESCE(last_seen_at, created_at) >= ?
+              AND (? = '' OR jti != ?)
+            ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (str(user_id), now, active_after, exclude_jti or "", exclude_jti or "", safe_limit),
+        ).fetchall()
+    return [public_refresh_session(row) for row in rows]
 
 
 def cleanup_expired_refresh_tokens() -> None:

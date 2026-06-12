@@ -223,6 +223,7 @@
       .form-grid, .tabs { grid-template-columns: 1fr; }
     }
   </style>
+  {% include "partials/theme_head.html" %}
   <script>
     const savedTheme = localStorage.getItem('cryptoAgentTheme') || 'dark';
     document.addEventListener('DOMContentLoaded', () => document.body.dataset.theme = savedTheme);

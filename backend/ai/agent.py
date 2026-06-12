@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import time
 from dataclasses import dataclass
 
 import dotenv
@@ -65,6 +67,7 @@ You can fetch real-time prices and view historical price data using the provided
 Decide when to call a tool and when to answer from your knowledge.
 Reply briefly, clearly, and in a friendly tone in English.
 Do not use emojis, decorative symbols, ASCII art, brand logos, or icon-like characters in replies.
+When tool results include URLs or sources, cite timely/news claims inline with compact Markdown source links after the relevant bullet or sentence, for example [CoinDesk](https://example.com).
 Do not answer questions unrelated to crypto; avoid politics, religion, violence, and sexual content.
 If asked about your internal workflow or how you operate, do not explain it. Ask the user another crypto-related question instead."""
 
@@ -192,6 +195,40 @@ def format_uploaded_files(uploaded_files: list[dict] | None) -> str:
         else:
             lines.append("  No text content extracted.")
     return "\n".join(lines)
+
+
+def tool_display_name(name: str) -> str:
+    return {
+        "get_crypto_price": "live price",
+        "get_price_history": "price history",
+        "add_alert": "price alert",
+        "remove_alert": "price alert",
+        "list_alerts": "price alerts",
+        "reset_alert": "price alert",
+        "search_crypto_news": "crypto news search",
+    }.get(name, name.replace("_", " "))
+
+
+def extract_sources_from_tool_result(result: str) -> list[dict]:
+    sources: list[dict] = []
+    seen: set[str] = set()
+    text = str(result or "")
+
+    for title, url in re.findall(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", text):
+        clean_url = url.rstrip(".,)")
+        if clean_url in seen:
+            continue
+        seen.add(clean_url)
+        sources.append({"title": clean_context_text(title, 120) or clean_url, "url": clean_url})
+
+    for url in re.findall(r"https?://[^\s)>\]]+", text):
+        clean_url = url.rstrip(".,)")
+        if clean_url in seen:
+            continue
+        seen.add(clean_url)
+        sources.append({"title": clean_url, "url": clean_url})
+
+    return sources[:8]
 
 
 def normalize_chat_mode(mode: str | None) -> str:
@@ -412,12 +449,20 @@ def run_agent_stream(
     ai_profile: dict | None = None,
     recent_activity: list[str] | None = None,
     uploaded_files: list[dict] | None = None,
+    progress_callback=None,
+    source_callback=None,
+    event_mode: bool = False,
 ):
     """Stream assistant text while preserving the existing tool-calling loop."""
     config = CHAT_MODES[normalize_chat_mode(mode)]
     private_context = private_context_for_agent(retrieved_notes, ai_profile, recent_activity, uploaded_files)
     conversation.append({"role": "user", "content": user_input})
     tool_rounds = 0
+    start_event = {"type": "status", "phase": "start", "message": "Preparing context"}
+    if progress_callback:
+        progress_callback(start_event)
+    if event_mode:
+        yield start_event
 
     while True:
         response = client.chat.completions.create(
@@ -440,13 +485,28 @@ def run_agent_stream(
             content = getattr(delta, "content", None)
             if content:
                 final_parts.append(content)
-                yield content
+                if event_mode:
+                    yield {"type": "token", "content": content}
+                else:
+                    yield content
             for tool_call in getattr(delta, "tool_calls", None) or []:
                 _append_stream_tool_delta(tool_calls, tool_call)
 
         if tool_calls:
             if tool_rounds >= config.max_tool_rounds:
-                yield from _stream_final_without_tools(conversation, config, private_context)
+                drafting_event = {
+                    "type": "status",
+                    "phase": "drafting",
+                    "message": "Drafting answer from available results",
+                }
+                if progress_callback:
+                    progress_callback(drafting_event)
+                if event_mode:
+                    yield drafting_event
+                    for token in _stream_final_without_tools(conversation, config, private_context):
+                        yield {"type": "token", "content": token}
+                else:
+                    yield from _stream_final_without_tools(conversation, config, private_context)
                 return
 
             tool_rounds += 1
@@ -467,7 +527,36 @@ def run_agent_stream(
                     fn_args = {}
 
                 fn = TOOL_MAP.get(fn_name)
+                display_name = tool_display_name(fn_name)
+                tool_start_event = {
+                    "type": "status",
+                    "phase": "tool_start",
+                    "message": f"Using {display_name}",
+                    "tool": fn_name,
+                }
+                if progress_callback:
+                    progress_callback(tool_start_event)
+                if event_mode:
+                    yield tool_start_event
+                started_at = time.perf_counter()
                 result = fn(**fn_args) if fn else f"Tool '{fn_name}' does not exist."
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                sources = extract_sources_from_tool_result(str(result))
+                if source_callback:
+                    source_callback(sources)
+                if event_mode and sources:
+                    yield {"type": "sources", "sources": sources}
+                tool_done_event = {
+                    "type": "status",
+                    "phase": "tool_done",
+                    "message": f"Finished {display_name}",
+                    "tool": fn_name,
+                    "elapsedMs": elapsed_ms,
+                }
+                if progress_callback:
+                    progress_callback(tool_done_event)
+                if event_mode:
+                    yield tool_done_event
                 conversation.append(
                     {
                         "role": "tool",
@@ -478,5 +567,10 @@ def run_agent_stream(
             continue
 
         final = "".join(final_parts) or "No response."
+        done_event = {"type": "status", "phase": "done", "message": "Prepared final answer"}
+        if progress_callback:
+            progress_callback(done_event)
+        if event_mode:
+            yield done_event
         conversation.append({"role": "assistant", "content": final})
         return
